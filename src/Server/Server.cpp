@@ -32,3 +32,12 @@ void Server::_setupSocket() {
 	if (listen(_servFd, SOMAXCONN) == -1) // Tells the OS to start accepting incoming connection requests on that socket. SOMAXCONN is the max queue of pending connections waiting to be accept()ed
 		throw std::runtime_error("listen() failed!");
 }
+
+void Server::_loopServer() {
+	struct pollfd servPollFd;
+	servPollFd.fd = _servFd;
+	servPollFd.events = POLLIN; // This Flag means this "wake me up when this fd has data ready to read"
+	servPollFd.revents = 0;
+	_fds.push_back(servPollFd);
+
+}
