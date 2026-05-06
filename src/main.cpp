@@ -1,12 +1,27 @@
 #include <iostream>
+#include <cstdlib>
+#include <stdexcept>
+#include "../includes/Server.hpp"
 
-int main(int argc, char *argv[])
+int main(int ac, char *av[])
 {
-	if (argc != 3)
+	if (ac != 3)
 	{
 		std::cerr << "Usage: ./ircserv <port> <password>" << std::endl;
 		return 1;
 	}
-	(void)argv;
+	int port = atoi(av[1]);
+	if (port <= 0 || port > 65535){
+		std::cerr << "Error: Port not valid!" << std::endl;
+		return 1;
+	}
+	try {
+		Server s(port, av[2]);
+		s.start();
+	}
+	catch(std::exception &e){
+		std::cerr << e.what() << std::endl;
+		return 1;
+	}
 	return 0;
 }
