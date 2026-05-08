@@ -15,13 +15,15 @@
 class Server {
 	private:
 		int _port;
-		std::string _userName;
+		// std::string _userName;
 		std::string _password;
 		int _servFd;
 		std::vector<struct pollfd> _fds;
 
 		void _setupSocket();
 		void _loopServer();
+		void _acceptNewClient();
+		bool _handleClient(int fd);
 
 		Server(const Server& other);
 		Server& operator=(const Server& other);

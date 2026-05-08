@@ -33,6 +33,40 @@ void Server::_setupSocket() {
 		throw std::runtime_error("listen() failed!");
 }
 
+void Server::_acceptNewClient() {
+	struct sockaddr_in clientAddr;
+	socklen_t clientLen = sizeof(clientAddr);
+	int clientFd = accept(_servFd, reinterpret_cast<struct sockaddr*>(&clientAddr), &clientLen);
+	if (clientFd == -1)
+		throw std::runtime_error("accept() failed!");
+	
+	fcntl(clientFd, F_SETFL, O_NONBLOCK);
+
+	struct pollfd clientPollFd;
+	clientPollFd.fd = clientFd;
+	clientPollFd.events = POLLIN; // This Flag means this "wake me up when this fd has data ready to read"
+	clientPollFd.revents = 0;
+	_fds.push_back(clientPollFd);
+}
+
+bool Server::_handleClient(int fd) {
+	char buffer[512];
+	std::memset(buffer, 0, sizeof(buffer));
+	int bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
+	if (bytes == 0) {
+		return true;
+	}
+	else if (bytes == -1){
+		std::cerr << "recv() error on fd " << fd << std::endl;
+		return true;
+	}
+	else {
+		// Needs Parsing here
+		std::cout << "Received: " << buffer << std::endl;
+		return false;
+	}
+}
+
 void Server::_loopServer() {
 	struct pollfd servPollFd;
 	servPollFd.fd = _servFd;
@@ -40,4 +74,27 @@ void Server::_loopServer() {
 	servPollFd.revents = 0;
 	_fds.push_back(servPollFd);
 
+	while (true) {
+		if(poll(_fds.data(), _fds.size(), -1) == -1)
+			throw std::runtime_error("poll() failed!");
+		for(size_t i = 0; i < _fds.size(); i++){
+			if (_fds[i].revents & POLLIN) { // The there is data to read in that fd
+				if (i == 0){
+					_acceptNewClient();
+				}
+				else {
+					if (_handleClient(_fds[i].fd)){
+						close(_fds[i].fd);
+						_fds.erase(_fds.begin() + i);
+						i--;
+					}
+				}
+			}
+		}
+	}
+}
+
+void Server::start() {
+	_setupSocket();
+	_loopServer();
 }
