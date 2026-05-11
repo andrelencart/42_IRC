@@ -49,19 +49,44 @@ void Server::_acceptNewClient() {
 	_fds.push_back(clientPollFd);
 }
 
+void Server::_processCommand(int fd, std::string line) {
+	std::istringstream iss(line);
+	std::string command;
+	iss >> command;
+	if (command == "PASS")
+		;//handle PASS
+	else if (command == "NICK")
+		; //handle NICK
+	else if (command == "USER")
+		;
+}
+
+void Server::_processBuffer(int fd) {
+	size_t pos;
+	while ((pos = _clientBuffers[fd].find("\r\n")) != std::string::npos) {
+		std::string line = _clientBuffers[fd].substr(0, pos);
+		std::cout << "Line: " << line << std::endl;
+		_clientBuffers[fd].erase(0, pos + 2);
+		_processCommand(fd, line);
+	}
+}
+
 bool Server::_handleClient(int fd) {
 	char buffer[512];
 	std::memset(buffer, 0, sizeof(buffer));
 	int bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
 	if (bytes == 0) {
+		_clientBuffers.erase(fd);
 		return true;
 	}
 	else if (bytes == -1){
 		std::cerr << "recv() error on fd " << fd << std::endl;
+		_clientBuffers.erase(fd);
 		return true;
 	}
 	else {
-		// Needs Parsing here
+		_clientBuffers[fd] += std::string(buffer, bytes);
+		_processBuffer(fd);
 		std::cout << "Received: " << buffer << std::endl;
 		return false;
 	}
