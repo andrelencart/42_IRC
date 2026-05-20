@@ -49,32 +49,106 @@ void Server::_acceptNewClient() {
 	_fds.push_back(clientPollFd);
 }
 
-void Server::_processCommand(int fd, std::string line) {
+bool Server::_processCommand(int fd, std::string line) {
 	std::istringstream iss(line);
 	std::string command;
 	iss >> command;
-	if (command == "PASS")
-		;//handle PASS
-	else if (command == "NICK")
-		; //handle NICK
-	else if (command == "USER")
-		;
+
+	if (command != "PASS" && !_authenticated.count(fd)){
+		_sendMsg(fd, ":server 451 * :You have not registered\r\n");
+		return false;
+	}
+
+	if (command == "PASS"){
+		if (!_handlePass(fd, iss))
+			return false;
+	}
+	else if (command == "NICK"){
+		if (!_handleNick(fd, iss))
+			return false;
+	}
+	else if (command == "USER"){
+		if (!_handleUser(fd, iss))
+			return false;
+	}
+	return true;
 }
 
-void Server::_processBuffer(int fd) {
+bool Server::_handlePass(int fd, std::istringstream& iss) {
+	std::string password;
+	iss >> password;
+
+	if (password.empty()){
+		_sendMsg(fd, ":server 464 * :Password empty\r\n");
+		return false; // disconnect fd,
+	}
+	else if (password != _password){
+		_sendMsg(fd, ":server 464 * :Password incorrect\r\n");
+		return false;
+	}
+	else{
+		_authenticated[fd] = true;
+		return true;
+	}
+}
+
+bool Server::_handleNick(int fd, std::istringstream& iss){
+	std::string nick;
+	iss >> nick;
+
+	std::map<int, std::string>::iterator i;
+	if (nick.empty()){
+		_sendMsg(fd, ":server 431 * :Nickname is empty\r\n");
+		return false;
+	}
+	for (i = _nicknames.begin(); i != _nicknames.end(); i++){
+		if (i->second == nick){
+			_sendMsg(fd, ":server 433 * " + nick + " :Nickname is already in use\r\n");
+			return false;
+		}
+	}
+	_nicknames[fd] = nick;
+	return true;
+}
+
+bool Server::_handleUser(int fd, std::istringstream& iss){
+	std::string user;
+	iss >> user;
+
+	if (user.empty()){
+		 _sendMsg(fd, ":server 461 * USER :Not enough parameters\r\n");
+		 return false;
+	}
+	else if (_usernames.count(fd) > 0){
+		_sendMsg(fd, ":server 462 * :You may not reregister\r\n");
+		return false;
+	}
+	_usernames[fd] = user;
+	return true;
+}
+
+void Server::_sendMsg(int fd, std::string msg) {
+	send(fd, msg.c_str(), msg.size(), 0);
+}
+
+bool Server::_processBuffer(int fd) {
 	size_t pos;
+
 	while ((pos = _clientBuffers[fd].find("\r\n")) != std::string::npos) {
 		std::string line = _clientBuffers[fd].substr(0, pos);
 		std::cout << "Line: " << line << std::endl;
 		_clientBuffers[fd].erase(0, pos + 2);
-		_processCommand(fd, line);
+		if (!_processCommand(fd, line))
+			return false;
 	}
+	return true;
 }
 
 bool Server::_handleClient(int fd) {
 	char buffer[512];
 	std::memset(buffer, 0, sizeof(buffer));
 	int bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
+
 	if (bytes == 0) {
 		_clientBuffers.erase(fd);
 		return true;
@@ -86,9 +160,10 @@ bool Server::_handleClient(int fd) {
 	}
 	else {
 		_clientBuffers[fd] += std::string(buffer, bytes);
-		_processBuffer(fd);
-		std::cout << "Received: " << buffer << std::endl;
+		if (!_processBuffer(fd))
+			return true;
 		return false;
+		//std::cout << "Received: " << buffer << std::endl;
 	}
 }
 
@@ -103,7 +178,7 @@ void Server::_loopServer() {
 		if(poll(_fds.data(), _fds.size(), -1) == -1)
 			throw std::runtime_error("poll() failed!");
 		for(size_t i = 0; i < _fds.size(); i++){
-			if (_fds[i].revents & POLLIN) { // The there is data to read in that fd
+			if (_fds[i].revents & POLLIN) { // if there is data to read in that fd
 				if (i == 0){
 					_acceptNewClient();
 				}
