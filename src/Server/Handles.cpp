@@ -28,14 +28,16 @@ bool Server::_handlePass(int fd, std::istringstream& iss) {
 
 	if (password.empty()){
 		_sendMsg(fd, ":server 464 * :Password empty\r\n");
+		_removeClient(fd);
 		return false; // disconnect fd,
 	}
 	else if (password != _password){
 		_sendMsg(fd, ":server 464 * :Password incorrect\r\n");
+		_removeClient(fd);
 		return false;
 	}
 	else{
-		_authenticated[fd] = true;
+		_passverified[fd] = true;
 		return true;
 	}
 }

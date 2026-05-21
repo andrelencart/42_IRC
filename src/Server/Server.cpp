@@ -1,10 +1,19 @@
 #include "../../includes/Server.hpp"
 
+volatile sig_atomic_t g_stop = 0;
+
+void signalHandler(int sig){
+	(void)sig;
+	g_stop = 1;
+}
+
 Server::Server(): _port(0), _password(""), _servFd(-1) {}
 
 Server::Server(int port, std::string password): _port(port), _password(password), _servFd(-1) {}
 
 Server::~Server() {
+	for (size_t i = 1; i < _fds.size(); i++)
+		close(_fds[i].fd);
 	if (_servFd != -1)
 		close(_servFd);
 	std::cout << "Server Shutdown!" << std::endl;
@@ -56,9 +65,9 @@ bool Server::_processCommand(int fd, std::string line) {
 	std::string command;
 	iss >> command;
 
-	if (command != "PASS" && !_authenticated.count(fd)){
+	if (command != "PASS" && !_passverified.count(fd)){
 		_sendMsg(fd, ":server 451 * :You have not registered\r\n");
-		return false;
+		return true;
 	}
 
 	if (command == "PASS"){
@@ -66,13 +75,15 @@ bool Server::_processCommand(int fd, std::string line) {
 			return false;
 	}
 	else if (command == "NICK"){
-		if (!_handleNick(fd, iss))
-			return false;
+		_handleNick(fd, iss);
+		
 	}
 	else if (command == "USER"){
-		if (!_handleUser(fd, iss))
-			return false;
+		_handleUser(fd, iss);
+		
 	}
+	if (_passverified.count(fd) && _nicknames.count(fd) && _usernames.count(fd))
+		_authenticated[fd] = true;
 	return true;
 }
 
@@ -81,7 +92,8 @@ bool Server::_processBuffer(int fd) {
 
 	while ((pos = _clientBuffers[fd].find("\r\n")) != std::string::npos) {
 		std::string line = _clientBuffers[fd].substr(0, pos);
-		std::cout << "Line: " << line << std::endl;
+		if (_authenticated[fd])
+			std::cout << "Line: " << line << std::endl;
 		_clientBuffers[fd].erase(0, pos + 2);
 		if (!_processCommand(fd, line))
 			return false;
@@ -96,9 +108,14 @@ void Server::_loopServer() {
 	servPollFd.revents = 0;
 	_fds.push_back(servPollFd);
 
-	while (true) {
-		if(poll(_fds.data(), _fds.size(), -1) == -1)
+	signal(SIGINT, signalHandler);
+	while (!g_stop) {
+		int connected = poll(_fds.data(), _fds.size(), -1);
+		if(connected == -1){
+			if (errno == EINTR)
+				break;
 			throw std::runtime_error("poll() failed!");
+		}
 		for(size_t i = 0; i < _fds.size(); i++){
 			if (_fds[i].revents & POLLIN) { // if there is data to read in that fd
 				if (i == 0){
@@ -117,7 +134,7 @@ void Server::_loopServer() {
 }
 
 void Server::start() {
-	signal(SIGPIPE, SIG_IGN); //registers a handler for the SIGPIPE signal and sets it to SIG_IGN (ignore).
+	//signal(SIGPIPE, SIG_IGN); //registers a handler for the SIGPIPE signal and sets it to SIG_IGN (ignore).
 	_setupSocket();
 	std::cout << "Server is up on port " << _port << std::endl;
 	_loopServer();

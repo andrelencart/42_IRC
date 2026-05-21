@@ -13,6 +13,7 @@
 #include <map>
 #include <poll.h>
 #include <csignal>
+#include <cerrno>
 
 
 class Server {
@@ -23,6 +24,7 @@ class Server {
 		std::vector<struct pollfd> _fds;
 		std::map<int, std::string> _clientBuffers;
 		std::map<int, bool> _authenticated; // will be deleted after the migration to the Client Class
+		std::map<int, bool> _passverified; // will be deleted after the migration to the Client Class;
 		std::map<int, std::string> _nicknames; // will be deleted after the migration to the Client Class
 		std::map<int, std::string> _usernames; // will be deleted after the migration to the Client Class
 
@@ -52,5 +54,7 @@ class Server {
 		void start();
 
 };
+
+void signalhHandler(int sig);
 
 #endif
