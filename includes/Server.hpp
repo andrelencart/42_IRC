@@ -12,6 +12,7 @@
 #include <vector>
 #include <map>
 #include <poll.h>
+#include <csignal>
 
 
 class Server {
@@ -38,6 +39,7 @@ class Server {
 		//Helpers / Errors
 
 		void _sendMsg(int fd, std::string msg);
+		void _removeClient(int fd);
 
 		Server(const Server& other);
 		Server& operator=(const Server& other);

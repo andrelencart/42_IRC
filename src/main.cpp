@@ -3,6 +3,8 @@
 #include <stdexcept>
 #include "../includes/Server.hpp"
 
+//We have leaks in poll when the CTRL C happens inside the server. Are they valid or need to be handled?
+
 int main(int ac, char *av[])
 {
 	if (ac != 3)
