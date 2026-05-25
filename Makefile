@@ -12,9 +12,10 @@ OBJ_DIR	=	objs
 
 # -->┊( SOURCES AND OBJS )
 SRCS	=	main.cpp \
-			Server/Server.cpp \
+			Server/Server.cpp Server/Handles.cpp Server/Helpers.cpp\
 			Client/Client.cpp \
-			Channel/Channel.cpp
+			Channel/Channel.cpp \
+
 
 OBJS	=	$(addprefix $(OBJ_DIR)/, $(SRCS:.cpp=.o))
 

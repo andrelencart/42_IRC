@@ -1,10 +1,19 @@
 #include "../../includes/Server.hpp"
 
+volatile sig_atomic_t g_stop = 0;
+
+void signalHandler(int sig){
+	(void)sig;
+	g_stop = 1;
+}
+
 Server::Server(): _port(0), _password(""), _servFd(-1) {}
 
 Server::Server(int port, std::string password): _port(port), _password(password), _servFd(-1) {}
 
 Server::~Server() {
+	for (size_t i = 1; i < _fds.size(); i++)
+		close(_fds[i].fd);
 	if (_servFd != -1)
 		close(_servFd);
 	std::cout << "Server Shutdown!" << std::endl;
@@ -42,6 +51,8 @@ void Server::_acceptNewClient() {
 	
 	fcntl(clientFd, F_SETFL, O_NONBLOCK);
 
+	std::cout << "New client connected: fd " << clientFd << std::endl;
+
 	struct pollfd clientPollFd;
 	clientPollFd.fd = clientFd;
 	clientPollFd.events = POLLIN; // This Flag means this "wake me up when this fd has data ready to read"
@@ -49,22 +60,45 @@ void Server::_acceptNewClient() {
 	_fds.push_back(clientPollFd);
 }
 
-bool Server::_handleClient(int fd) {
-	char buffer[512];
-	std::memset(buffer, 0, sizeof(buffer));
-	int bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
-	if (bytes == 0) {
+bool Server::_processCommand(int fd, std::string line) {
+	std::istringstream iss(line);
+	std::string command;
+	iss >> command;
+
+	if (command != "PASS" && !_passverified.count(fd)){
+		_sendMsg(fd, ":server 451 * :You have not registered\r\n");
 		return true;
 	}
-	else if (bytes == -1){
-		std::cerr << "recv() error on fd " << fd << std::endl;
-		return true;
+
+	if (command == "PASS"){
+		if (!_handlePass(fd, iss))
+			return false;
 	}
-	else {
-		// Needs Parsing here
-		std::cout << "Received: " << buffer << std::endl;
-		return false;
+	else if (command == "NICK"){
+		_handleNick(fd, iss);
+		
 	}
+	else if (command == "USER"){
+		_handleUser(fd, iss);
+		
+	}
+	if (_passverified.count(fd) && _nicknames.count(fd) && _usernames.count(fd))
+		_authenticated[fd] = true;
+	return true;
+}
+
+bool Server::_processBuffer(int fd) {
+	size_t pos;
+
+	while ((pos = _clientBuffers[fd].find("\r\n")) != std::string::npos) {
+		std::string line = _clientBuffers[fd].substr(0, pos);
+		if (_authenticated[fd])
+			std::cout << "Line: " << line << std::endl;
+		_clientBuffers[fd].erase(0, pos + 2);
+		if (!_processCommand(fd, line))
+			return false;
+	}
+	return true;
 }
 
 void Server::_loopServer() {
@@ -74,11 +108,16 @@ void Server::_loopServer() {
 	servPollFd.revents = 0;
 	_fds.push_back(servPollFd);
 
-	while (true) {
-		if(poll(_fds.data(), _fds.size(), -1) == -1)
+	signal(SIGINT, signalHandler);
+	while (!g_stop) {
+		int connected = poll(_fds.data(), _fds.size(), -1);
+		if(connected == -1){
+			if (errno == EINTR)
+				break;
 			throw std::runtime_error("poll() failed!");
+		}
 		for(size_t i = 0; i < _fds.size(); i++){
-			if (_fds[i].revents & POLLIN) { // The there is data to read in that fd
+			if (_fds[i].revents & POLLIN) { // if there is data to read in that fd
 				if (i == 0){
 					_acceptNewClient();
 				}
@@ -95,6 +134,8 @@ void Server::_loopServer() {
 }
 
 void Server::start() {
+	//signal(SIGPIPE, SIG_IGN); //registers a handler for the SIGPIPE signal and sets it to SIG_IGN (ignore).
 	_setupSocket();
+	std::cout << "Server is up on port " << _port << std::endl;
 	_loopServer();
 }
