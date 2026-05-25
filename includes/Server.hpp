@@ -14,7 +14,7 @@
 #include <poll.h>
 #include <csignal>
 #include <cerrno>
-
+#include "Client.hpp"
 
 class Server {
 	private:
@@ -27,7 +27,7 @@ class Server {
 		std::map<int, bool> _passverified; // will be deleted after the migration to the Client Class;
 		std::map<int, std::string> _nicknames; // will be deleted after the migration to the Client Class
 		std::map<int, std::string> _usernames; // will be deleted after the migration to the Client Class
-
+		std::map<int, Client> _clients;
 		void _setupSocket();
 		void _loopServer();
 		void _acceptNewClient();

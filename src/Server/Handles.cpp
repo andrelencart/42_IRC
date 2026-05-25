@@ -15,7 +15,8 @@ bool Server::_handleClient(int fd) {
 		return true;
 	}
 	else {
-		_clientBuffers[fd] += std::string(buffer, bytes);
+		_clients[fd].appendReadBuffer(std::string(buffer, bytes));
+		std::cout << _clients[fd].getReadBuffer();; // ADICIONADA PARA TESTE
 		if (!_processBuffer(fd))
 			return true;
 		return false;
@@ -37,7 +38,8 @@ bool Server::_handlePass(int fd, std::istringstream& iss) {
 		return false;
 	}
 	else{
-		_passverified[fd] = true;
+		//_passverified[fd] = true;
+		_clients[fd].setPassword(true);
 		return true;
 	}
 }
@@ -57,7 +59,8 @@ bool Server::_handleNick(int fd, std::istringstream& iss){
 			return false;
 		}
 	}
-	_nicknames[fd] = nick;
+	//_nicknames[fd] = nick;
+	_clients[fd].setNickname(nick);
 	return true;
 }
 
@@ -73,6 +76,7 @@ bool Server::_handleUser(int fd, std::istringstream& iss){
 		_sendMsg(fd, ":server 462 * :You may not reregister\r\n");
 		return false;
 	}
-	_usernames[fd] = user;
+	//_usernames[fd] = user;
+	_clients[fd].setUsername(user);
 	return true;
 }

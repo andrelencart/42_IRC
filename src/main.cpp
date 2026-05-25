@@ -18,6 +18,7 @@ int main(int ac, char *av[])
 		return 1;
 	}
 	try {
+		std::cout << "Trying to connect\n";
 		Server s(port, av[2]);
 		s.start();
 	}

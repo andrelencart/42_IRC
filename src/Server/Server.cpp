@@ -50,9 +50,10 @@ void Server::_acceptNewClient() {
 		throw std::runtime_error("accept() failed!");
 	
 	fcntl(clientFd, F_SETFL, O_NONBLOCK);
-
-	std::cout << "New client connected: fd " << clientFd << std::endl;
-
+	Client newClient(clientFd);
+	_clients[clientFd] = newClient;
+	std::cout << "New client connected: fd " << newClient.getClientFD() << std::endl;
+  
 	struct pollfd clientPollFd;
 	clientPollFd.fd = clientFd;
 	clientPollFd.events = POLLIN; // This Flag means this "wake me up when this fd has data ready to read"
@@ -69,30 +70,33 @@ bool Server::_processCommand(int fd, std::string line) {
 		_sendMsg(fd, ":server 451 * :You have not registered\r\n");
 		return true;
 	}
-
 	if (command == "PASS"){
 		if (!_handlePass(fd, iss))
 			return false;
 	}
 	else if (command == "NICK"){
 		_handleNick(fd, iss);
-		
+		std::cout << "NICKING\n";
 	}
 	else if (command == "USER"){
 		_handleUser(fd, iss);
 		
 	}
 	if (_passverified.count(fd) && _nicknames.count(fd) && _usernames.count(fd))
-		_authenticated[fd] = true;
+	{
+		//_authenticated[fd] = true;
+		_clients[fd].setAuth(true);
+	}
+	std::cout << "Client info\n" << _clients[fd].getAuth() << "\n" << _clients[fd].getClientFD() << "\n" << _clients[fd].getNickname() << "\n" << _clients[fd].getUsername() << "\n" << _clients[fd].getPassword() << "\n" << _clients[fd].getReadBuffer() << std::endl;
 	return true;
 }
 
 bool Server::_processBuffer(int fd) {
 	size_t pos;
 
-	while ((pos = _clientBuffers[fd].find("\r\n")) != std::string::npos) {
-		std::string line = _clientBuffers[fd].substr(0, pos);
-		if (_authenticated[fd])
+	while ((pos = _clients[fd].getReadBuffer().find("\r\n")) != std::string::npos) {
+		std::string line = _clients[fd].getReadBuffer().substr(0, pos);
+		if (_clients[fd].getAuth())
 			std::cout << "Line: " << line << std::endl;
 		_clientBuffers[fd].erase(0, pos + 2);
 		if (!_processCommand(fd, line))
@@ -107,7 +111,6 @@ void Server::_loopServer() {
 	servPollFd.events = POLLIN; // This Flag means this "wake me up when this fd has data ready to read"
 	servPollFd.revents = 0;
 	_fds.push_back(servPollFd);
-
 	signal(SIGINT, signalHandler);
 	while (!g_stop) {
 		int connected = poll(_fds.data(), _fds.size(), -1);
