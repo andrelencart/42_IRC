@@ -1,4 +1,25 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   Handles.cpp                                        :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dicosta- <dicosta-@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/27 16:49:17 by dicosta-          #+#    #+#             */
+/*   Updated: 2026/05/27 21:16:50 by dicosta-         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "../../includes/Server.hpp"
+
+void Server::_handleHelp(int fd)
+{
+	_sendMsg(fd,"IRC Connection Manual\r\n\n");
+	_sendMsg(fd,"1. PASS <server password>\r\n");
+	_sendMsg(fd,"2. NICK <user nickname>\r\n");
+	_sendMsg(fd,"3. USER <user username>\r\n");
+	_sendMsg(fd,"4. JOIN #<channel name> (optional)<password>\r\n");
+};
 
 bool Server::_handleClient(int fd) {
 	char buffer[512];
@@ -16,67 +37,80 @@ bool Server::_handleClient(int fd) {
 	}
 	else {
 		_clients[fd].appendReadBuffer(std::string(buffer, bytes));
-		std::cout << _clients[fd].getReadBuffer();; // ADICIONADA PARA TESTE
+	//	std::cout << _clients[fd].getReadBuffer(); // ADICIONADA PARA TESTE
 		if (!_processBuffer(fd))
 			return true;
 		return false;
 	}
 }
 
-bool Server::_handlePass(int fd, std::istringstream& iss) {
-	std::string password;
-	iss >> password;
-
-	if (password.empty()){
+bool Server::_handlePass(int fd, std::string password){
+	if (password.empty())
+	{
 		_sendMsg(fd, ":server 464 * :Password empty\r\n");
 		_removeClient(fd);
 		return false; // disconnect fd,
 	}
-	else if (password != _password){
+	else if (password != _password)
+	{
 		_sendMsg(fd, ":server 464 * :Password incorrect\r\n");
 		_removeClient(fd);
 		return false;
 	}
-	else{
-		//_passverified[fd] = true;
+	else
+	{
 		_clients[fd].setPassword(true);
 		return true;
 	}
 }
 
-bool Server::_handleNick(int fd, std::istringstream& iss){
-	std::string nick;
-	iss >> nick;
-
-	std::map<int, std::string>::iterator i;
+bool Server::_handleNick(int fd, std::string nick){
 	if (nick.empty()){
 		_sendMsg(fd, ":server 431 * :Nickname is empty\r\n");
 		return false;
 	}
-	for (i = _nicknames.begin(); i != _nicknames.end(); i++){
-		if (i->second == nick){
-			_sendMsg(fd, ":server 433 * " + nick + " :Nickname is already in use\r\n");
-			return false;
-		}
+	if(_checkDupes("nickname", nick))
+	{
+		_sendMsg(fd, ":server 433 * " + nick + " :Nickname is already in use\r\n");
+		return false;
 	}
-	//_nicknames[fd] = nick;
 	_clients[fd].setNickname(nick);
 	return true;
 }
 
-bool Server::_handleUser(int fd, std::istringstream& iss){
-	std::string user;
-	iss >> user;
-
+bool Server::_handleUser(int fd, std::string user)
+{
+	/* TO DO
+		check for repeated nicks / users 
+	*/
 	if (user.empty()){
 		 _sendMsg(fd, ":server 461 * USER :Not enough parameters\r\n");
 		 return false;
 	}
-	else if (_usernames.count(fd) > 0){
+	if (_checkDupes("username", user)) //Added this check to see if Username is duped
+	{
+		_sendMsg(fd, ":server DUNNOYET * : Username is already in use \r\n");
+		return false;
+	}
+	//!_clients[fd].getUsername().empty();
+	//else if (_usernames.count(fd) > 0){
+	else if (!_clients[fd].getUsername().empty()){ //changed this check to see if string username is empty
 		_sendMsg(fd, ":server 462 * :You may not reregister\r\n");
 		return false;
 	}
-	//_usernames[fd] = user;
 	_clients[fd].setUsername(user);
 	return true;
 }
+
+bool Server::_checkDupes(std::string type, std::string toCheck) const
+{
+	std::map<int, Client>::const_iterator i;
+	for (i = _clients.begin(); i != _clients.end(); i++)
+	{
+		if (type == "username" && i->second.getUsername() == toCheck)
+			return (true);
+		else if (type == "nickname" && i->second.getNickname() == toCheck)
+			return (true);
+	}
+	return (false);
+};

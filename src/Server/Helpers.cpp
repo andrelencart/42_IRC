@@ -1,10 +1,20 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   Helpers.cpp                                        :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dicosta- <dicosta-@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/27 16:49:41 by dicosta-          #+#    #+#             */
+/*   Updated: 2026/05/27 18:42:22 by dicosta-         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "../../includes/Server.hpp"
 
 void Server::_removeClient(int fd) {
 	_clientBuffers.erase(fd);
-	_authenticated.erase(fd);
-	_nicknames.erase(fd);
-	_usernames.erase(fd);
+	_clients.erase(fd);
 	std::cout << "Client disconnected: fd " << fd << std::endl;
 
 }

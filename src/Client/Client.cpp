@@ -6,7 +6,7 @@
 /*   By: dicosta- <dicosta-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/25 18:48:58 by dicosta-          #+#    #+#             */
-/*   Updated: 2026/05/25 22:04:13 by dicosta-         ###   ########.fr       */
+/*   Updated: 2026/05/27 19:11:45 by dicosta-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -37,4 +37,9 @@ Client& Client::operator=(const Client &other)
 void Client::appendReadBuffer(std::string toAppend)
 {
 	_readBuffer += toAppend;
+};
+
+void Client::eraseBuffer(size_t pos)
+{
+	_readBuffer.erase(0, pos + 2);
 };

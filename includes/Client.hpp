@@ -19,9 +19,14 @@ class Client
 		bool		_Auth;
 		std::string _nickname;
 		std::string _username;
-		bool _password;
+		bool 		_password;
 		std::string _readBuffer;
 		std::string _writeBuffer;
+		enum role
+		{
+			operator,
+			no
+		}
 	public:
 
 		// Constructors
@@ -48,7 +53,8 @@ class Client
 		void	setAuth(bool Auth){ _Auth = Auth; };
 
 		//Others
-		void appendReadBuffer(std::string toAppend);
+		void	appendReadBuffer(std::string toAppend);
+		void	eraseBuffer(size_t pos);
 };
 
 

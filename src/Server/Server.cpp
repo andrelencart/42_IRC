@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   Server.cpp                                         :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dicosta- <dicosta-@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/27 16:49:29 by dicosta-          #+#    #+#             */
+/*   Updated: 2026/05/27 19:51:27 by dicosta-         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "../../includes/Server.hpp"
 
 volatile sig_atomic_t g_stop = 0;
@@ -23,7 +35,7 @@ void Server::_setupSocket() {
 	_servFd = socket(AF_INET, SOCK_STREAM, 0); //Creates a TCP socket. AF_INET = IPv4, SOCK_STREAM = TCP (reliable, ordered). Returns a file descriptor (_servFd)
 	if (_servFd == -1)
 		throw std::runtime_error("socket() failed!");
-	
+
 	int opt = 1;
 	if (setsockopt(_servFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1) //Tells the OS to allow reusing the port immediately after the server stops. Without this, if you restart the server quickly you get "address already in use" for ~60 seconds
 		throw std::runtime_error("setsockopt() failed!");
@@ -64,30 +76,38 @@ void Server::_acceptNewClient() {
 bool Server::_processCommand(int fd, std::string line) {
 	std::istringstream iss(line);
 	std::string command;
-	iss >> command;
+	std::string param;
 
-	if (command != "PASS" && !_passverified.count(fd)){
+	// Handle functions recebiam o "iss" e eu mudei para "param" para receber o valor diretamente
+	iss >> command;
+	iss >> param;
+	if (command != "PASS" && !_clients[fd].getPassword()){
 		_sendMsg(fd, ":server 451 * :You have not registered\r\n");
 		return true;
 	}
 	if (command == "PASS"){
-		if (!_handlePass(fd, iss))
+		if (!_handlePass(fd, param))
 			return false;
 	}
 	else if (command == "NICK"){
-		_handleNick(fd, iss);
-		std::cout << "NICKING\n";
+		_handleNick(fd, param);
+			
 	}
 	else if (command == "USER"){
-		_handleUser(fd, iss);
+		_handleUser(fd, param);
 		
 	}
-	if (_passverified.count(fd) && _nicknames.count(fd) && _usernames.count(fd))
+	else if (command == "HELP")
 	{
-		//_authenticated[fd] = true;
-		_clients[fd].setAuth(true);
+		_handleHelp(fd);
 	}
-	std::cout << "Client info\n" << _clients[fd].getAuth() << "\n" << _clients[fd].getClientFD() << "\n" << _clients[fd].getNickname() << "\n" << _clients[fd].getUsername() << "\n" << _clients[fd].getPassword() << "\n" << _clients[fd].getReadBuffer() << std::endl;
+	if (_clients[fd].getPassword() && !_clients[fd].getNickname().empty() && !_clients[fd].getUsername().empty())
+	{
+		_clients[fd].setAuth(true);
+		//std::stringstream welcomeMessage;
+		//welcomeMessage << "002" << _clients[fd].getNickname() << "your host is localhost\r\n";
+		//std::cout << "Client info\n" << _clients[fd].getAuth() << "\n" << _clients[fd].getClientFD() << "\n" << _clients[fd].getNickname() << "\n" << _clients[fd].getUsername() << "\n" << _clients[fd].getPassword() << "\n" << _clients[fd].getReadBuffer() << std::endl;
+	}
 	return true;
 }
 
@@ -98,7 +118,7 @@ bool Server::_processBuffer(int fd) {
 		std::string line = _clients[fd].getReadBuffer().substr(0, pos);
 		if (_clients[fd].getAuth())
 			std::cout << "Line: " << line << std::endl;
-		_clientBuffers[fd].erase(0, pos + 2);
+		_clients[fd].eraseBuffer(pos);
 		if (!_processCommand(fd, line))
 			return false;
 	}

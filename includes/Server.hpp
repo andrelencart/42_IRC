@@ -23,10 +23,10 @@ class Server {
 		int _servFd;
 		std::vector<struct pollfd> _fds;
 		std::map<int, std::string> _clientBuffers;
-		std::map<int, bool> _authenticated; // will be deleted after the migration to the Client Class
-		std::map<int, bool> _passverified; // will be deleted after the migration to the Client Class;
-		std::map<int, std::string> _nicknames; // will be deleted after the migration to the Client Class
-		std::map<int, std::string> _usernames; // will be deleted after the migration to the Client Class
+		//std::map<int, bool> _authenticated; // will be deleted after the migration to the Client Class
+		//std::map<int, bool> _passverified; // will be deleted after the migration to the Client Class;
+		//std::map<int, std::string> _nicknames; // will be deleted after the migration to the Client Class
+		//std::map<int, std::string> _usernames; // will be deleted after the migration to the Client Class
 		std::map<int, Client> _clients;
 		void _setupSocket();
 		void _loopServer();
@@ -34,10 +34,11 @@ class Server {
 		bool _handleClient(int fd);
 		bool _processBuffer(int fd);
 		bool _processCommand(int fd, std::string line);
-		bool _handlePass(int fd, std::istringstream& iss);
-		bool _handleNick(int fd, std::istringstream& iss);
-		bool _handleUser(int fd, std::istringstream& iss);
-
+		bool _handlePass(int fd, std::string password);
+		bool _handleNick(int fd, std::string nick);
+		bool _handleUser(int fd, std::string user);
+		void _handleHelp(int fd);
+		bool _checkDupes(std::string type, std::string toCheck) const;
 		//Helpers / Errors
 
 		void _sendMsg(int fd, std::string msg);
