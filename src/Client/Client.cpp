@@ -30,6 +30,7 @@ Client& Client::operator=(const Client &other)
 		_nickname = other._nickname;
 		_password = other._password;
 		_username = other._username;
+		//teste
 	}
 	return (*this);
 };
