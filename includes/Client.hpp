@@ -22,11 +22,7 @@ class Client
 		bool 		_password;
 		std::string _readBuffer;
 		std::string _writeBuffer;
-		enum role
-		{
-			operator,
-			no
-		}
+		
 	public:
 
 		// Constructors

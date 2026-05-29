@@ -19,7 +19,7 @@ int main(int ac, char *av[])
 	}
 	try {
 		std::cout << "Trying to connect\n";
-		Server s(port, av[2]);
+		Server s(port, av[2], "irc.server.42");
 		s.start();
 	}
 	catch(std::exception &e){

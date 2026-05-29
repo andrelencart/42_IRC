@@ -47,13 +47,13 @@ bool Server::_handleClient(int fd) {
 bool Server::_handlePass(int fd, std::string password){
 	if (password.empty())
 	{
-		_sendMsg(fd, ":server 464 * :Password empty\r\n");
+		_sendMsg(fd, ERR_NEEDMOREPARAMS("PASS"));
 		_removeClient(fd);
 		return false; // disconnect fd,
 	}
 	else if (password != _password)
 	{
-		_sendMsg(fd, ":server 464 * :Password incorrect\r\n");
+		_sendMsg(fd, ERR_PASSWDMISMATCH());
 		_removeClient(fd);
 		return false;
 	}
@@ -64,18 +64,32 @@ bool Server::_handlePass(int fd, std::string password){
 	}
 }
 
-bool Server::_handleNick(int fd, std::string nick){
+bool Server::_handleNick(int fd, std::string nick)
+{
 	if (nick.empty()){
-		_sendMsg(fd, ":server 431 * :Nickname is empty\r\n");
-		return false;
+		_sendMsg(fd, ERR_NONICKNAMEGIVEN());
+		return (false);
+	} 
+	if (nick.size() > 9 || isdigit(nick[0]) || nick[0] == '-') // nicknames cant be longer than 9 chars && Cant start with number or hyphen
+	{
+		_sendMsg(fd, ERR_ERRONEUSNICKNAME(nick));
+		return (false);
+	}
+	for (size_t i = 1; i < nick.size(); i++)
+	{
+		if (isspace(nick[i]) || !isascii(nick[i]) || nick[i] == '@' || nick[i] == '!' || nick[i] == '.' || nick[i] == ':' || nick[i] == ',') // cant have any of the following chars
+		{
+			_sendMsg(fd, ERR_ERRONEUSNICKNAME(nick));
+			return (false);
+		}
 	}
 	if(_checkDupes("nickname", nick))
 	{
-		_sendMsg(fd, ":server 433 * " + nick + " :Nickname is already in use\r\n");
+		_sendMsg(fd, ERR_NICKNAMEINUSE(nick));
 		return false;
 	}
 	_clients[fd].setNickname(nick);
-	return true;
+	return (true);
 }
 
 bool Server::_handleUser(int fd, std::string user)
@@ -84,18 +98,19 @@ bool Server::_handleUser(int fd, std::string user)
 		check for repeated nicks / users 
 	*/
 	if (user.empty()){
-		 _sendMsg(fd, ":server 461 * USER :Not enough parameters\r\n");
+		 _sendMsg(fd, ERR_NEEDMOREPARAMS("USER"));
 		 return false;
 	}
-	if (_checkDupes("username", user)) //Added this check to see if Username is duped
-	{
-		_sendMsg(fd, ":server DUNNOYET * : Username is already in use \r\n");
-		return false;
-	}
+	//Deleted user dupe check as usernames can be duped
+	//if (_checkDupes("username", user)) //Added this check to see if Username is duped
+	//{
+	//	_sendMsg(fd, ":server DUNNOYET * : Username is already in use \r\n");
+	//	return false;
+	//}
 	//!_clients[fd].getUsername().empty();
 	//else if (_usernames.count(fd) > 0){
 	else if (!_clients[fd].getUsername().empty()){ //changed this check to see if string username is empty
-		_sendMsg(fd, ":server 462 * :You may not reregister\r\n");
+		_sendMsg(fd, ERR_ALREADYREGISTED() );
 		return false;
 	}
 	_clients[fd].setUsername(user);

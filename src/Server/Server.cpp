@@ -21,7 +21,7 @@ void signalHandler(int sig){
 
 Server::Server(): _port(0), _password(""), _servFd(-1) {}
 
-Server::Server(int port, std::string password): _port(port), _password(password), _servFd(-1) {}
+Server::Server(int port, std::string password, std::string serverName): _port(port), _password(password), _serverName(serverName), _servFd(-1) {}
 
 Server::~Server() {
 	for (size_t i = 1; i < _fds.size(); i++)
@@ -101,12 +101,33 @@ bool Server::_processCommand(int fd, std::string line) {
 	{
 		_handleHelp(fd);
 	}
+	//else if (command == "JOIN")
+	//{
+	//	_handleJoin(fd);
+	//}
+	//else if (command == "KICK")
+	//{
+	//	_handleKick(fd);
+	//}
+	//else if (command == "INVITE")
+	//{
+	//	_handleInvite(fd);
+	//}
+	//else if (command == "TOPIC")
+	//{
+	//	_handleTopic(fd);
+	//}
+	//else if (command == "MODE")
+	//{
+	//	_handleMode(fd);
+	//}
 	if (_clients[fd].getPassword() && !_clients[fd].getNickname().empty() && !_clients[fd].getUsername().empty())
 	{
 		_clients[fd].setAuth(true);
-		//std::stringstream welcomeMessage;
-		//welcomeMessage << "002" << _clients[fd].getNickname() << "your host is localhost\r\n";
-		//std::cout << "Client info\n" << _clients[fd].getAuth() << "\n" << _clients[fd].getClientFD() << "\n" << _clients[fd].getNickname() << "\n" << _clients[fd].getUsername() << "\n" << _clients[fd].getPassword() << "\n" << _clients[fd].getReadBuffer() << std::endl;
+		// Created a welcome message according to IRC standards, Need to change servername.
+		std::stringstream ss;
+		ss << ":" << _serverName << " 001 " << _clients[fd].getNickname() << ":Welcome to the Internet Relay Network " << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost\r\n"; 
+		_sendMsg(fd, ss.str());
 	}
 	return true;
 }
@@ -117,7 +138,7 @@ bool Server::_processBuffer(int fd) {
 	while ((pos = _clients[fd].getReadBuffer().find("\r\n")) != std::string::npos) {
 		std::string line = _clients[fd].getReadBuffer().substr(0, pos);
 		if (_clients[fd].getAuth())
-			std::cout << "Line: " << line << std::endl;
+			std::cout << _clients[fd].getNickname() << ": " << line << std::endl;
 		_clients[fd].eraseBuffer(pos);
 		if (!_processCommand(fd, line))
 			return false;
