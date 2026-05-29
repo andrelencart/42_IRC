@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 #include "../../includes/Server.hpp"
+#include "../../includes/Channel.hpp"
 
 volatile sig_atomic_t g_stop = 0;
 
@@ -101,10 +102,6 @@ bool Server::_processCommand(int fd, std::string line) {
 	{
 		_handleHelp(fd);
 	}
-	//else if (command == "JOIN")
-	//{
-	//	_handleJoin(fd);
-	//}
 	//else if (command == "KICK")
 	//{
 	//	_handleKick(fd);
@@ -121,13 +118,17 @@ bool Server::_processCommand(int fd, std::string line) {
 	//{
 	//	_handleMode(fd);
 	//}
-	if (_clients[fd].getPassword() && !_clients[fd].getNickname().empty() && !_clients[fd].getUsername().empty())
+	if (_clients[fd].getAuth() == false && _clients[fd].getPassword() && !_clients[fd].getNickname().empty() && !_clients[fd].getUsername().empty())
 	{
 		_clients[fd].setAuth(true);
 		// Created a welcome message according to IRC standards, Need to change servername.
 		std::stringstream ss;
 		ss << ":" << _serverName << " 001 " << _clients[fd].getNickname() << ":Welcome to the Internet Relay Network " << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost\r\n"; 
 		_sendMsg(fd, ss.str());
+	}
+	if (command == "JOIN" && _clients[fd].getAuth() == true)
+	{
+		_handleJoin(fd, line);
 	}
 	return true;
 }
