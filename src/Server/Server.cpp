@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   Server.cpp                                         :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dicosta- <dicosta-@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/27 16:49:29 by dicosta-          #+#    #+#             */
+/*   Updated: 2026/05/27 19:51:27 by dicosta-         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "../../includes/Server.hpp"
 
 volatile sig_atomic_t g_stop = 0;
@@ -9,7 +21,7 @@ void signalHandler(int sig){
 
 Server::Server(): _port(0), _password(""), _servFd(-1) {}
 
-Server::Server(int port, std::string password): _port(port), _password(password), _servFd(-1) {}
+Server::Server(int port, std::string password, std::string serverName): _port(port), _password(password), _serverName(serverName), _servFd(-1) {}
 
 Server::~Server() {
 	for (size_t i = 1; i < _fds.size(); i++)
@@ -23,7 +35,7 @@ void Server::_setupSocket() {
 	_servFd = socket(AF_INET, SOCK_STREAM, 0); //Creates a TCP socket. AF_INET = IPv4, SOCK_STREAM = TCP (reliable, ordered). Returns a file descriptor (_servFd)
 	if (_servFd == -1)
 		throw std::runtime_error("socket() failed!");
-	
+
 	int opt = 1;
 	if (setsockopt(_servFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1) //Tells the OS to allow reusing the port immediately after the server stops. Without this, if you restart the server quickly you get "address already in use" for ~60 seconds
 		throw std::runtime_error("setsockopt() failed!");
@@ -50,9 +62,10 @@ void Server::_acceptNewClient() {
 		throw std::runtime_error("accept() failed!");
 	
 	fcntl(clientFd, F_SETFL, O_NONBLOCK);
-
-	std::cout << "New client connected: fd " << clientFd << std::endl;
-
+	Client newClient(clientFd);
+	_clients[clientFd] = newClient;
+	std::cout << "New client connected: fd " << newClient.getClientFD() << std::endl;
+  
 	struct pollfd clientPollFd;
 	clientPollFd.fd = clientFd;
 	clientPollFd.events = POLLIN; // This Flag means this "wake me up when this fd has data ready to read"
@@ -63,38 +76,70 @@ void Server::_acceptNewClient() {
 bool Server::_processCommand(int fd, std::string line) {
 	std::istringstream iss(line);
 	std::string command;
-	iss >> command;
+	std::string param;
 
-	if (command != "PASS" && !_passverified.count(fd)){
+	// Handle functions recebiam o "iss" e eu mudei para "param" para receber o valor diretamente
+	iss >> command;
+	iss >> param;
+	if (command != "PASS" && !_clients[fd].getPassword()){
 		_sendMsg(fd, ":server 451 * :You have not registered\r\n");
 		return true;
 	}
-
 	if (command == "PASS"){
-		if (!_handlePass(fd, iss))
+		if (!_handlePass(fd, param))
 			return false;
 	}
 	else if (command == "NICK"){
-		_handleNick(fd, iss);
-		
+		_handleNick(fd, param);
+			
 	}
 	else if (command == "USER"){
-		_handleUser(fd, iss);
+		_handleUser(fd, param);
 		
 	}
-	if (_passverified.count(fd) && _nicknames.count(fd) && _usernames.count(fd))
-		_authenticated[fd] = true;
+	else if (command == "HELP")
+	{
+		_handleHelp(fd);
+	}
+	//else if (command == "JOIN")
+	//{
+	//	_handleJoin(fd);
+	//}
+	//else if (command == "KICK")
+	//{
+	//	_handleKick(fd);
+	//}
+	//else if (command == "INVITE")
+	//{
+	//	_handleInvite(fd);
+	//}
+	//else if (command == "TOPIC")
+	//{
+	//	_handleTopic(fd);
+	//}
+	//else if (command == "MODE")
+	//{
+	//	_handleMode(fd);
+	//}
+	if (_clients[fd].getPassword() && !_clients[fd].getNickname().empty() && !_clients[fd].getUsername().empty())
+	{
+		_clients[fd].setAuth(true);
+		// Created a welcome message according to IRC standards, Need to change servername.
+		std::stringstream ss;
+		ss << ":" << _serverName << " 001 " << _clients[fd].getNickname() << ":Welcome to the Internet Relay Network " << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost\r\n"; 
+		_sendMsg(fd, ss.str());
+	}
 	return true;
 }
 
 bool Server::_processBuffer(int fd) {
 	size_t pos;
 
-	while ((pos = _clientBuffers[fd].find("\r\n")) != std::string::npos) {
-		std::string line = _clientBuffers[fd].substr(0, pos);
-		if (_authenticated[fd])
-			std::cout << "Line: " << line << std::endl;
-		_clientBuffers[fd].erase(0, pos + 2);
+	while ((pos = _clients[fd].getReadBuffer().find("\r\n")) != std::string::npos) {
+		std::string line = _clients[fd].getReadBuffer().substr(0, pos);
+		if (_clients[fd].getAuth())
+			std::cout << _clients[fd].getNickname() << ": " << line << std::endl;
+		_clients[fd].eraseBuffer(pos);
 		if (!_processCommand(fd, line))
 			return false;
 	}
@@ -107,7 +152,6 @@ void Server::_loopServer() {
 	servPollFd.events = POLLIN; // This Flag means this "wake me up when this fd has data ready to read"
 	servPollFd.revents = 0;
 	_fds.push_back(servPollFd);
-
 	signal(SIGINT, signalHandler);
 	while (!g_stop) {
 		int connected = poll(_fds.data(), _fds.size(), -1);
