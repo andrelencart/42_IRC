@@ -45,7 +45,7 @@ class Server {
 		void _handleHelp(int fd);
 		bool _handleJoin(int fd, std::string line);
 		bool buildChan(std::map<std::string, std::string>::const_iterator channel, int fd);
-		void	broadcastToChannel(std::string chanName, std::string msg);
+		void	broadcastToChannel(std::string chanName, std::string msg, int fd);
 		bool _checkDupes(std::string type, std::string toCheck) const;
 		//Helpers / Errors
 

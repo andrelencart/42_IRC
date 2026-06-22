@@ -19,6 +19,7 @@ class Channel
 
 		std::string	_name;
 		std::string	_pass;
+		std::string	_topic;
 		bool	_hasPass;
 		size_t		_userLimit;
 		bool	_inviteOnly;
@@ -39,9 +40,14 @@ class Channel
 		// Getters
 		std::string	getName() const;
 		std::string	getPass() const;
+		std::string	getTopic() const;
 		bool hasPass() const;
-		bool getInviteOnly() const;
+		bool isInviteOnly() const;
+		bool isOperator(int fd) const;
 		int	getUserLimit() const;
+		bool isInvited(int fd) const;
+		bool isFull() const;
+		bool isMember(int fd) const;
 		size_t	getMemberCount() const;
 		const std::set<int>& getMembers() const;
 
@@ -52,14 +58,11 @@ class Channel
 
 		//Others
 		void	addMember(int fd);
-		// void	removeMember(int fd);
-		// bool	isMember(int fd) const;
-		// void	addOperator(int fd);
-		// void	removeOperator(int fd);
-		// bool	isOperator(int fd) const;
+		void	removeMember(int fd);
+		void	addOperator(int fd);
+		void	removeOperator(int fd);
 		// void	invite(int fd);
-		bool	isInvited(int fd) const;
-		bool	isFull() const;  
+		
 };
 
 void _sendMsg2(int fd, std::string msg);

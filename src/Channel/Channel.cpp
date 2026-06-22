@@ -1,8 +1,8 @@
 #include "../../includes/Channel.hpp"
 
-Channel::Channel() : _name("#default"), _hasPass(false), _userLimit(-1), _inviteOnly(false) {};
+Channel::Channel() : _name("#default"), _topic(""), _hasPass(false), _userLimit(-1), _inviteOnly(false) {};
 
-Channel::Channel(std::string channel) : _name(channel), _hasPass(false), _userLimit(-1), _inviteOnly(false){};
+Channel::Channel(std::string channel) : _name(channel), _topic(""), _hasPass(false), _userLimit(-1), _inviteOnly(false){};
 
 Channel::Channel(const Channel &other)
 {
@@ -15,6 +15,7 @@ Channel &Channel::operator=(const Channel &other)
 	{
 		_name = other._name;
 		_pass = other._pass;
+		_topic = other._topic;
 		_hasPass = other._hasPass;
 		_userLimit = other._userLimit;
 		_inviteOnly = other._inviteOnly;
@@ -26,6 +27,8 @@ Channel &Channel::operator=(const Channel &other)
 	return (*this);
 }
 
+//Getters
+
 std::string	Channel::getName() const{
 	return _name;
 }
@@ -34,11 +37,15 @@ std::string	Channel::getPass() const{
 	return _pass;
 }
 
+std::string	Channel::getTopic() const{
+	return _topic;
+}
+
 bool Channel::hasPass() const{
 	return _hasPass;
 }
 
-bool Channel::getInviteOnly() const{
+bool Channel::isInviteOnly() const{
 	return _inviteOnly;
 }
 
@@ -54,6 +61,26 @@ const std::set<int>& Channel::getMembers() const{
 	return _members;
 }
 
+bool Channel::isOperator(int fd) const{
+	if(_operators.find(fd) != _operators.end())
+		return true;
+	return false;
+}
+
+bool	Channel::isInvited(int fd) const{
+	if(_members.find(fd) != _members.end())
+		return true;
+	return false;
+}
+
+bool	Channel::isFull() const{
+	if (getMemberCount() >= _userLimit)
+		return true;
+	return false;
+}
+
+//Setters
+
 void Channel::setPass(std::string pass){
 	_hasPass = true;
 	_pass = pass;
@@ -67,21 +94,26 @@ void Channel::setUserLimit(int limit){
 	_userLimit = limit;
 }
 
+//Others
+
 void	Channel::addMember(int fd){
 	if(_members.find(fd) == _members.end())
 		_members.insert(fd);
 }
 
-bool	Channel::isInvited(int fd) const{
-	if(_members.find(fd) != _members.end())
-		return true;
-	return false;
+void	Channel::addOperator(int fd){
+	if(_operators.find(fd) == _operators.end())
+		_operators.insert(fd);
 }
 
-bool	Channel::isFull() const{
-	if (getMemberCount() >= _userLimit)
-		return true;
-	return false;
+void	Channel::removeMember(int fd){
+	if(_members.find(fd) != _members.end())
+		_members.erase(fd);
+}
+
+void	Channel::removeOperator(int fd){
+	if(_operators.find(fd) != _operators.end())
+		_operators.erase(fd);
 }
 
 void _sendMsg2(int fd, std::string msg)

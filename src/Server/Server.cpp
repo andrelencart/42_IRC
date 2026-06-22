@@ -161,7 +161,7 @@ bool Server::buildChan(std::map<std::string, std::string>::const_iterator channe
 	if(it->second.isFull()){
 		return false;
 	}
-	if(it->second.getInviteOnly() && !it->second.isInvited(fd)){
+	if(it->second.isInviteOnly() && !it->second.isInvited(fd)){
 		return false;
 	}
 	if(it->second.hasPass() && it->second.getPass() != channels->second){
@@ -273,19 +273,22 @@ bool Server::_processCommand(int fd, std::string line) {
 	{
 		_handleJoin(fd, line);
 	}
+	if(command[0] == '#')
+		broadcastToChannel(command, param, fd);
 	return true;
 }
 
-void	Server::broadcastToChannel(std::string chanName, std::string msg){
+void	Server::broadcastToChannel(std::string chanName, std::string msg, int fd){
 	std::map<std::string, Channel>::iterator finder;
+	std::stringstream ss;
 	finder = _channels.find(chanName);
 	if(finder == _channels.end())
 		return ;
 	const std::set<int> &members = finder->second.getMembers();
 	std::set<int>::const_iterator it;
+	ss << finder->second.getName() << ", "<<_clients[fd].getNickname() << ": " << msg << std::endl;
 	for (it = members.begin(); it != members.end(); it++){
-		_sendMsg(*it, msg);
-		std::cout << msg << std::endl;
+		_sendMsg(*it, ss.str());
 	}
 }
 
