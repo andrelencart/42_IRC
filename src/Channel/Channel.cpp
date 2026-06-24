@@ -86,6 +86,10 @@ void Channel::setPass(std::string pass){
 	_pass = pass;
 }
 
+void Channel::setTopic(std::string topic){
+	_topic = topic;
+}
+
 void Channel::setInviteOnly(bool i){
 	_inviteOnly = i;
 }
@@ -114,6 +118,11 @@ void	Channel::removeMember(int fd){
 void	Channel::removeOperator(int fd){
 	if(_operators.find(fd) != _operators.end())
 		_operators.erase(fd);
+}
+
+void	Channel::invite(int fd){
+	if(_invited.find(fd) == _invited.end())
+		_invited.insert(fd);
 }
 
 void _sendMsg2(int fd, std::string msg)

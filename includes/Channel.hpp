@@ -53,6 +53,7 @@ class Channel
 
 		// Setters
 		void setPass(std::string pass);
+		void setTopic(std::string topic);
 		void setInviteOnly(bool i);
 		void setUserLimit(int limit);
 
@@ -61,7 +62,7 @@ class Channel
 		void	removeMember(int fd);
 		void	addOperator(int fd);
 		void	removeOperator(int fd);
-		// void	invite(int fd);
+		void	invite(int fd);
 		
 };
 

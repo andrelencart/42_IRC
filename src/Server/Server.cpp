@@ -199,21 +199,112 @@ bool Server::_handleJoin(int fd, std::string line)
 		return false;
 	std::map<std::string, std::string>::const_iterator it;
     for (it = channels.begin(); it != channels.end(); it++) {
-        std::cout << "Chave: " << it->first 
-                  << " | Valor: " << it->second 
-                  << std::endl;
 		if(!parseChan(it, fd))
 			return false;
     }
-	std::cout << "check_no: " << check_no << std::endl;
-	std::cout << "channel: " << channel << std::endl;
-	std::cout << "pass: " << pass << std::endl;
 	bool ret = true;
 	for (it = channels.begin(); it != channels.end(); it++) {
 		if(!buildChan(it, fd))
 			ret = false;
     }
 	return ret;
+}
+
+int Server::_userToFd(std::string username, int fd, std::string cmdErr){
+	std::map<int, Client>::iterator uname;
+	for(uname = _clients.begin(); uname != _clients.end(); uname++){
+		if(uname->second.getNickname() == username)
+			break;
+	}
+	if(uname == _clients.end()){
+		_sendMsg2(fd, ERR_BADCHANMASK(cmdErr));
+		return false;
+	}
+	return uname->second.getClientFD();
+}
+
+bool Server::_handleKick(int fd, std::string line)
+{
+	std::istringstream iss(line);
+	std::string check_no;
+	std::string channel;
+	std::string username;
+	std::string comment;
+	std::stringstream ss;
+	int user;
+
+	iss >> check_no;
+	iss >> channel;
+	iss >> username;
+	iss >> comment;
+	iss >> check_no;
+	if (check_no != "KICK")
+	{
+		_sendMsg2(fd, ERR_TOOMANYTARGETS("KICK"));
+		return false;
+	}
+	if(channel == "" || username == ""){
+		_sendMsg2(fd, ERR_NEEDMOREPARAMS("KICK"));
+		return false;
+	}
+	std::map<std::string, Channel>::iterator it;
+	it = _channels.find(channel);
+	if(it == _channels.end()){
+		_sendMsg2(fd, ERR_BADCHANMASK("KICK"));
+		return false;
+	}
+	user = _userToFd(username, fd, "KICK");
+	if(!it->second.isMember(fd) || !it->second.isOperator(fd) || !it->second.isMember(user) || it->second.isOperator(user))
+	{
+		_sendMsg2(fd, ERR_NOSUCHNICK("KICK"));
+		return false;
+	}
+	it->second.removeMember(user);
+	const std::set<int> &members = it->second.getMembers();
+	std::set<int>::const_iterator iter;
+	ss << fd << ": Kicked " << user << " from " << channel;
+	if(comment != "")
+		ss << " because " << comment;
+	ss << '.' << std::endl;
+	for (iter = members.begin(); iter != members.end(); it++){
+		_sendMsg(*iter, ss.str());
+	}
+	return true;
+}
+
+bool Server::_handleInvite(int fd, std::string line)
+{
+	std::istringstream iss(line);
+	std::string check_no;
+	std::string username;
+	std::string channel;
+	int user;
+
+	iss >> check_no;
+	iss >> username;
+	iss >> channel;
+	iss >> check_no;
+	if (check_no != "INVITE")
+	{
+		_sendMsg2(fd, ERR_TOOMANYTARGETS("INVITE"));
+		return false;
+	}
+	if(channel == "" || username == ""){
+		_sendMsg2(fd, ERR_NEEDMOREPARAMS("INVITE"));
+		return false;
+	}
+	std::map<std::string, Channel>::iterator it;
+	it = _channels.find(channel);
+	if(it == _channels.end()){
+		_sendMsg2(fd, ERR_BADCHANMASK("INVITE"));
+		return false;
+	}
+	if(!it->second.isInviteOnly() && !it->second.hasPass()){
+		return false;
+	}
+	user = _userToFd(username, fd, "INVITE");
+	it->second.invite(user);
+	return true;
 }
 
 
@@ -245,14 +336,8 @@ bool Server::_processCommand(int fd, std::string line) {
 	{
 		_handleHelp(fd);
 	}
-	//else if (command == "KICK")
-	//{
-	//	_handleKick(fd);
-	//}
-	//else if (command == "INVITE")
-	//{
-	//	_handleInvite(fd);
-	//}
+	
+	
 	//else if (command == "TOPIC")
 	//{
 	//	_handleTopic(fd);
@@ -269,12 +354,23 @@ bool Server::_processCommand(int fd, std::string line) {
 		ss << ":" << _serverName << " 001 " << _clients[fd].getNickname() << ":Welcome to the Internet Relay Network " << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost\r\n"; 
 		_sendMsg(fd, ss.str());
 	}
-	if (command == "JOIN" && _clients[fd].getAuth() == true)
-	{
-		_handleJoin(fd, line);
+	if (_clients[fd].getAuth() == true){
+		if (command == "JOIN")
+		{
+			_handleJoin(fd, line);
+		}
+		else if (command == "KICK")
+		{
+			_handleKick(fd, line);
+		}
+		else if (command == "INVITE")
+		{
+			_handleInvite(fd, line);
+		}
 	}
+	
 	if(command[0] == '#')
-		broadcastToChannel(command, param, fd);
+		broadcastToChannel(command, param, fd); //temporary for testing broadcast to channel function; usage: 'channel' 'msg'.
 	return true;
 }
 
