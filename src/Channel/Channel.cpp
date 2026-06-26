@@ -61,6 +61,12 @@ const std::set<int>& Channel::getMembers() const{
 	return _members;
 }
 
+bool Channel::isMember(int fd) const{
+	if(_members.find(fd) != _members.end())
+		return true;
+	return false;
+}
+
 bool Channel::isOperator(int fd) const{
 	if(_operators.find(fd) != _operators.end())
 		return true;

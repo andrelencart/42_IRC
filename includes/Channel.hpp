@@ -67,6 +67,5 @@ class Channel
 };
 
 void _sendMsg2(int fd, std::string msg);
-bool _handleJoin(int fd, std::string line);
 
 #endif

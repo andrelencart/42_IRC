@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   Server.cpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dicosta- <dicosta-@student.42.fr>          +#+  +:+       +#+        */
+/*   By: rmota-ma <rmota-ma@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/27 16:49:29 by dicosta-          #+#    #+#             */
-/*   Updated: 2026/05/27 19:51:27 by dicosta-         ###   ########.fr       */
+/*   Updated: 2026/06/26 20:55:50 by rmota-ma         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -150,12 +150,23 @@ bool parseChan(std::map<std::string, std::string>::const_iterator it, int fd){
 
 bool Server::buildChan(std::map<std::string, std::string>::const_iterator channels, int fd){
 	std::map<std::string, Channel>::iterator it = _channels.find(channels->first);
+	std::stringstream ss;
 	if(it == _channels.end()){
 		Channel newChan(channels->first);
 		if(channels->second != "")
 			newChan.setPass(channels->second);
 		newChan.addMember(fd);
 		_channels.insert(std::pair<std::string, Channel>(channels->first, newChan));
+		ss << ":" << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost" << " JOIN :" << channels->first << "\r\n"; //":nick!user@host JOIN :#channel"
+		_sendMsg(fd, ss.str());
+		ss.str("");
+		ss.clear();
+		ss << ":" << _serverName << " 353 " << _clients[fd].getNickname()  << " = " << channels->first << " :@" << _clients[fd].getNickname() << "\r\n";
+		_sendMsg(fd, ss.str());
+		ss.str("");
+		ss.clear();
+		ss << ":" << _serverName << " 366 " << _clients[fd].getNickname() << " " << channels->first << " :End of /NAMES list." <<"\r\n";
+		_sendMsg(fd, ss.str());
 		return true;
 	}
 	if(it->second.isFull()){
@@ -168,8 +179,21 @@ bool Server::buildChan(std::map<std::string, std::string>::const_iterator channe
 		return false;
 	}
 	it->second.addMember(fd);
+	ss << ":" << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost" << " JOIN :" << channels->first << "\r\n"; //":nick!user@host JOIN :#channel"
+	_sendMsg(fd, ss.str());
+	ss.str("");
+	ss.clear();
+	ss << ":" << _serverName << " 353 " << _clients[fd].getNickname()  << " = " << channels->first << " :@" << _clients[fd].getNickname() << "\r\n";
+	_sendMsg(fd, ss.str());
+	ss.str("");
+	ss.clear();
+	ss << ":" << _serverName << " 366 " << _clients[fd].getNickname() << " " << channels->first << " :End of /NAMES list." <<"\r\n";
+	_sendMsg(fd, ss.str());
 	return true;
 }
+
+//"353 " + sender + " = " + channel + " :" + users
+//"366 " + sender + " " + channel + " :End of /NAMES list."
 
 bool Server::_handleJoin(int fd, std::string line)
 {
@@ -351,7 +375,7 @@ bool Server::_processCommand(int fd, std::string line) {
 		_clients[fd].setAuth(true);
 		// Created a welcome message according to IRC standards, Need to change servername.
 		std::stringstream ss;
-		ss << ":" << _serverName << " 001 " << _clients[fd].getNickname() << ":Welcome to the Internet Relay Network " << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost\r\n"; 
+		ss << ":" << _serverName << " 001 " << _clients[fd].getNickname() << " :Welcome to the Internet Relay Network " << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost\r\n"; 
 		_sendMsg(fd, ss.str());
 	}
 	if (_clients[fd].getAuth() == true){
@@ -367,11 +391,31 @@ bool Server::_processCommand(int fd, std::string line) {
 		{
 			_handleInvite(fd, line);
 		}
+		else if (command == "PRIVMSG")
+		{
+			_handleMsg(fd, line);
+		}
 	}
-	
 	if(command[0] == '#')
 		broadcastToChannel(command, param, fd); //temporary for testing broadcast to channel function; usage: 'channel' 'msg'.
 	return true;
+}
+
+void	Server::_handleMsg(int fd, std::string line){
+	std::istringstream iss(line);
+	std::string check_no;
+	std::string username;
+	std::string msg;
+	int user;
+
+	iss >> check_no;
+	iss >> username;
+	iss >> msg;
+	iss >> check_no;
+	user = _userToFd(username, fd, "TEST");
+	std::stringstream ss;
+	ss << ":" << _clients[fd].getNickname() << " PRIVMSG " << username << " " << msg << std::endl;
+	_sendMsg(user, ss.str());
 }
 
 void	Server::broadcastToChannel(std::string chanName, std::string msg, int fd){
