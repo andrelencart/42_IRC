@@ -12,7 +12,7 @@ OBJ_DIR	=	objs
 
 # -->┊( SOURCES AND OBJS )
 SRCS	=	main.cpp \
-			Server/Server.cpp Server/Handles.cpp Server/Helpers.cpp\
+			Server/Server.cpp Server/Commands.cpp Server/Parsing.cpp Server/Replies.cpp Server/Cleanup.cpp\
 			Client/Client.cpp \
 			Channel/Channel.cpp \
 
