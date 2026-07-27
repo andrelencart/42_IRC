@@ -118,34 +118,47 @@ Not all of this state is connected to complete commands yet.
 
 ### PASS
 
-Partially implemented.
+Implemented for the subject registration requirements.
 
 - Validates the received password.
 - Removes the client if the password is empty or wrong.
+- Rejects repeated `PASS` after the password has already been accepted.
+
+Current behavior:
+
+- `PASS` with no parameter sends `461` and disconnects the client.
+- `PASS` with a wrong password sends `464` and disconnects the client.
+- `PASS` with the correct password marks the client password state as accepted.
+- `PASS` after a successful password sends `462` and keeps the client connected.
 
 ### NICK
 
-Partially implemented.
+Implemented for the subject registration flow.
 
 - Stores the nickname.
 - Checks for an empty nickname.
-- Checks for duplicate nicknames.
+- Checks for duplicate nicknames while ignoring the current client fd.
 - Performs some character validation.
+- Validates invalid characters from the first character onward.
 
 ### USER
 
-Partially implemented.
+Implemented for the subject registration flow.
 
 - Stores the username.
 - Prevents repeating `USER` after it has already been set.
-
-Placeholder:
-
-- Adapt parsing to the normal IRC client format:
+- Parses the normal IRC client format:
 
 ```text
 Syntax: user/USER <username> 0 * <realname>
 ```
+
+- Sends `461 USER :Not enough parameters` when the command does not have enough parameters.
+- Sends `461 USER :Not enough parameters` when the second and third parameters are not `0` and `*`.
+
+Future improvement:
+
+- Store and/or parse the full realname when it contains spaces after `:`.
 
 ### JOIN
 
