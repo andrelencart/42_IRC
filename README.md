@@ -144,7 +144,7 @@ Placeholder:
 - Adapt parsing to the normal IRC client format:
 
 ```text
-USER <username> <hostname> <servername> :<realname>
+Syntax: user/USER <username> 0 * <realname>
 ```
 
 ### JOIN

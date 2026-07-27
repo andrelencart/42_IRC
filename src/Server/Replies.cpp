@@ -1,8 +1,4 @@
-#include "../../includes/Server.hpp"
-
-void Server::_sendMsg(int fd, std::string msg) {
-	send(fd, msg.c_str(), msg.size(), 0);
-}
+#include "../../includes/Server.hpp"	
 
 void	Server::broadcastToChannel(std::string chanName, std::string msg, int fd){
 	std::map<std::string, Channel>::iterator finder;

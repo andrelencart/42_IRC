@@ -66,6 +66,5 @@ class Channel
 		
 };
 
-void _sendMsg2(int fd, std::string msg);
 
 #endif

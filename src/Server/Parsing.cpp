@@ -29,7 +29,7 @@ std::map<std::string, std::string> buildMap(std::string channel, std::string pas
 		channels.insert(std::pair<std::string, std::string>(channel.substr(0, pos), temp));
 		channel = channel.substr(pos + 1, channel.size());
 		if (channel[0] == ','){
-			_sendMsg2(fd, ERR_BADCHANMASK("JOIN"));
+			_sendMsg(fd, ERR_BADCHANMASK("JOIN"));
 			*check = 1;
 		}
 		pos = 0;
@@ -49,7 +49,7 @@ std::map<std::string, std::string> buildMap(std::string channel, std::string pas
 	}
 	channels.insert(std::pair<std::string, std::string>(channel.substr(0, pos), temp));
 	if (pass[0]){
-		_sendMsg2(fd, ERR_NEEDMOREPARAMS("JOIN"));
+		_sendMsg(fd, ERR_NEEDMOREPARAMS("JOIN"));
 		*check = 1;
 	}
 	return channels;
@@ -58,17 +58,17 @@ std::map<std::string, std::string> buildMap(std::string channel, std::string pas
 bool parseChan(std::map<std::string, std::string>::const_iterator it, int fd){
 	if (it->first[0] != '&' && it->first[0] != '#')
 	{
-		_sendMsg2(fd, ERR_BADCHANMASK("JOIN"));
+		_sendMsg(fd, ERR_BADCHANMASK("JOIN"));
 		return false;
 	}
 	if (it->first.find(7) != std::string::npos)
 	{
-		_sendMsg2(fd, ERR_BADCHANMASK("JOIN"));
+		_sendMsg(fd, ERR_BADCHANMASK("JOIN"));
 		return false;
 	}
 	if (it->first.size() > 200)
 	{
-		_sendMsg2(fd, ERR_BADCHANMASK("JOIN"));
+		_sendMsg(fd, ERR_BADCHANMASK("JOIN"));
 		return false;
 	}
 	return true;
@@ -136,12 +136,12 @@ bool Server::_handleJoin(int fd, std::string line)
 	iss >> check_no;
 	if (check_no != "JOIN")
 	{
-		_sendMsg2(fd, ERR_TOOMANYTARGETS("JOIN"));
+		_sendMsg(fd, ERR_TOOMANYTARGETS("JOIN"));
 		return false;
 	}
 	if (channel.empty())
 	{
-		_sendMsg2(fd, ERR_NEEDMOREPARAMS("JOIN"));
+		_sendMsg(fd, ERR_NEEDMOREPARAMS("JOIN"));
 		return false;
 	}
 	channels = buildMap(channel, pass, fd, &check);
