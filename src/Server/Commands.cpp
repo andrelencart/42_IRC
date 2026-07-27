@@ -10,23 +10,24 @@ void Server::_handleHelp(int fd)
 };
 
 bool Server::_handlePass(int fd, std::string password){
+	if ( _clients[fd].getPassword() == true){
+		_sendMsg(fd, ERR_ALREADYREGISTED());
+		return true;
+	}
 	if (password.empty())
 	{
 		_sendMsg(fd, ERR_NEEDMOREPARAMS("PASS"));
 		_removeClient(fd);
 		return false; // disconnect fd,
 	}
-	else if (password != _password)
+	if (password != _password)
 	{
 		_sendMsg(fd, ERR_PASSWDMISMATCH());
 		_removeClient(fd);
 		return false;
 	}
-	else
-	{
-		_clients[fd].setPassword(true);
-		return true;
-	}
+	_clients[fd].setPassword(true);
+	return true;
 }
 
 bool Server::_handleNick(int fd, std::string nick)
@@ -40,7 +41,7 @@ bool Server::_handleNick(int fd, std::string nick)
 		_sendMsg(fd, ERR_ERRONEUSNICKNAME(nick));
 		return (false);
 	}
-	for (size_t i = 1; i < nick.size(); i++)
+	for (size_t i = 0; i < nick.size(); i++)
 	{
 		if (isspace(nick[i]) || !isascii(nick[i]) || nick[i] == '@' || nick[i] == '!' || nick[i] == '.' || nick[i] == ':' || nick[i] == ',') // cant have any of the following chars
 		{
@@ -48,7 +49,7 @@ bool Server::_handleNick(int fd, std::string nick)
 			return (false);
 		}
 	}
-	if(_checkDupes("nickname", nick))
+	if (_nickInUse(nick, fd))
 	{
 		_sendMsg(fd, ERR_NICKNAMEINUSE(nick));
 		return false;
@@ -57,28 +58,28 @@ bool Server::_handleNick(int fd, std::string nick)
 	return (true);
 }
 
-bool Server::_handleUser(int fd, std::string user)
+bool Server::_handleUser(int fd, std::string line)
 {
-	/* TO DO
-		check for repeated nicks / users 
-	*/
-	if (user.empty()){
-		 _sendMsg(fd, ERR_NEEDMOREPARAMS("USER"));
-		 return false;
+	std::istringstream iss(line);
+	std::vector<std::string> params;
+	std::string token;
+
+	while (iss >> token)
+		params.push_back(token);
+
+	if (params.size() < 5){
+		_sendMsg(fd, ERR_NEEDMOREPARAMS("USER"));
+		return false;
 	}
-	//Deleted user dupe check as usernames can be duped
-	//if (_checkDupes("username", user)) //Added this check to see if Username is duped
-	//{
-	//	_sendMsg(fd, ":server DUNNOYET * : Username is already in use \r\n");
-	//	return false;
-	//}
-	//!_clients[fd].getUsername().empty();
-	//else if (_usernames.count(fd) > 0){
-	else if (!_clients[fd].getUsername().empty()){ //changed this check to see if string username is empty
+	if (params[2] != "0" || params[3] != "*"){
+		_sendMsg(fd, ERR_NEEDMOREPARAMS("USER"));
+		return false;
+	}
+	if (!_clients[fd].getUsername().empty()){
 		_sendMsg(fd, ERR_ALREADYREGISTED() );
 		return false;
 	}
-	_clients[fd].setUsername(user);
+	_clients[fd].setUsername(params[1]);
 	return true;
 }
 
@@ -95,6 +96,18 @@ bool Server::_checkDupes(std::string type, std::string toCheck) const
 	return (false);
 };
 
+bool Server::_nickInUse(std::string nick, int currentFd) const
+{
+	std::map<int, Client>::const_iterator it;
+
+	for (it = _clients.begin(); it != _clients.end(); it++)
+	{
+		if (it->first != currentFd && it->second.getNickname() == nick)
+		return true;
+	}
+	return false;
+}
+
 int Server::_userToFd(std::string username, int fd, std::string cmdErr){
 	std::map<int, Client>::iterator uname;
 	for(uname = _clients.begin(); uname != _clients.end(); uname++){
@@ -102,7 +115,7 @@ int Server::_userToFd(std::string username, int fd, std::string cmdErr){
 			break;
 	}
 	if(uname == _clients.end()){
-		_sendMsg2(fd, ERR_BADCHANMASK(cmdErr));
+		_sendMsg(fd, ERR_BADCHANMASK(cmdErr));
 		return false;
 	}
 	return uname->second.getClientFD();
@@ -125,23 +138,23 @@ bool Server::_handleKick(int fd, std::string line)
 	iss >> check_no;
 	if (check_no != "KICK")
 	{
-		_sendMsg2(fd, ERR_TOOMANYTARGETS("KICK"));
+		_sendMsg(fd, ERR_TOOMANYTARGETS("KICK"));
 		return false;
 	}
 	if(channel == "" || username == ""){
-		_sendMsg2(fd, ERR_NEEDMOREPARAMS("KICK"));
+		_sendMsg(fd, ERR_NEEDMOREPARAMS("KICK"));
 		return false;
 	}
 	std::map<std::string, Channel>::iterator it;
 	it = _channels.find(channel);
 	if(it == _channels.end()){
-		_sendMsg2(fd, ERR_BADCHANMASK("KICK"));
+		_sendMsg(fd, ERR_BADCHANMASK("KICK"));
 		return false;
 	}
 	user = _userToFd(username, fd, "KICK");
 	if(!it->second.isMember(fd) || !it->second.isOperator(fd) || !it->second.isMember(user) || it->second.isOperator(user))
 	{
-		_sendMsg2(fd, ERR_NOSUCHNICK("KICK"));
+		_sendMsg(fd, ERR_NOSUCHNICK("KICK"));
 		return false;
 	}
 	it->second.removeMember(user);
@@ -171,17 +184,17 @@ bool Server::_handleInvite(int fd, std::string line)
 	iss >> check_no;
 	if (check_no != "INVITE")
 	{
-		_sendMsg2(fd, ERR_TOOMANYTARGETS("INVITE"));
+		_sendMsg(fd, ERR_TOOMANYTARGETS("INVITE"));
 		return false;
 	}
 	if(channel == "" || username == ""){
-		_sendMsg2(fd, ERR_NEEDMOREPARAMS("INVITE"));
+		_sendMsg(fd, ERR_NEEDMOREPARAMS("INVITE"));
 		return false;
 	}
 	std::map<std::string, Channel>::iterator it;
 	it = _channels.find(channel);
 	if(it == _channels.end()){
-		_sendMsg2(fd, ERR_BADCHANMASK("INVITE"));
+		_sendMsg(fd, ERR_BADCHANMASK("INVITE"));
 		return false;
 	}
 	if(!it->second.isInviteOnly() && !it->second.hasPass()){
@@ -213,7 +226,7 @@ bool Server::_processCommand(int fd, std::string line) {
 			
 	}
 	else if (command == "USER"){
-		_handleUser(fd, param);
+		_handleUser(fd, line);
 		
 	}
 	else if (command == "HELP")

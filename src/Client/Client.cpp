@@ -12,9 +12,9 @@
 
 #include "../../includes/Client.hpp"
 
-Client::Client(): _clientFD(0), _Auth(0), _nickname(""), _username(""), _password(""){};
+Client::Client(): _clientFD(0), _Auth(false), _nickname(""), _username(""), _password(false){};
 
-Client::Client(int fd): _clientFD(fd), _Auth(0), _nickname(""), _username(""), _password(""){};
+Client::Client(int fd): _clientFD(fd), _Auth(false), _nickname(""), _username(""), _password(false){};
 
 Client::Client(const Client &other)
 {

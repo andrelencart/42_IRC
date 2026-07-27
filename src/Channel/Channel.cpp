@@ -131,7 +131,7 @@ void	Channel::invite(int fd){
 		_invited.insert(fd);
 }
 
-void _sendMsg2(int fd, std::string msg)
+void _sendMsg(int fd, std::string msg)
 {
 	send(fd, msg.c_str(), msg.size(), 0);
 }

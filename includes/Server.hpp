@@ -41,7 +41,7 @@ class Server {
 		bool _processCommand(int fd, std::string line);
 		bool _handlePass(int fd, std::string password);
 		bool _handleNick(int fd, std::string nick);
-		bool _handleUser(int fd, std::string user);
+		bool _handleUser(int fd, std::string line);
 		void _handleHelp(int fd);
 		bool _handleJoin(int fd, std::string line);
 		bool _handleKick(int fd, std::string line);
@@ -50,9 +50,9 @@ class Server {
 		bool buildChan(std::map<std::string, std::string>::const_iterator channel, int fd);
 		void	broadcastToChannel(std::string chanName, std::string msg, int fd);
 		bool _checkDupes(std::string type, std::string toCheck) const;
+		bool _nickInUse(std::string nick, int currentFd) const;
 		//Helpers / Errors
 		int _userToFd(std::string username, int fd, std::string cmdErr);
-		void _sendMsg(int fd, std::string msg);
 		void _removeClient(int fd);
 
 		Server(const Server& other);
@@ -68,6 +68,7 @@ class Server {
 };
 
 void signalhHandler(int sig);
+void _sendMsg(int fd, std::string msg);
 
 #define ERR_NOSUCHNICK(nick)				(std::string("401 ") + (nick) + " :No such nick/channel\r\n")
 #define ERR_NOSUCHSERVER(server)			(std::string("402 ") + (server) + " :No such server\r\n")
