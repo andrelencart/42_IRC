@@ -1,3 +1,5 @@
+*This project has been created as part of the 42 curriculum by andcarva, .*
+
 # ft_irc
 
 IRC server written in C++98 for the 42 `ft_irc` project.
