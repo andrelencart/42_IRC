@@ -1,4 +1,4 @@
-# 42_IRC
+ # 42_IRC
 A C++98 IRC server implementation supporting real-time multi-client communication via TCP/IP, built from scratch without external libraries.
 
 Lets try to use the XCHAT that is already install in the 42PC's

@@ -3,14 +3,15 @@
 /*                                                        :::      ::::::::   */
 /*   Server.cpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dicosta- <dicosta-@student.42.fr>          +#+  +:+       +#+        */
+/*   By: rmota-ma <rmota-ma@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/27 16:49:29 by dicosta-          #+#    #+#             */
-/*   Updated: 2026/05/27 19:51:27 by dicosta-         ###   ########.fr       */
+/*   Updated: 2026/06/26 20:55:50 by rmota-ma         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../../includes/Server.hpp"
+
 
 volatile sig_atomic_t g_stop = 0;
 
@@ -73,6 +74,264 @@ void Server::_acceptNewClient() {
 	_fds.push_back(clientPollFd);
 }
 
+std::map<std::string, std::string> buildMap(std::string channel, std::string pass, int fd, int *check){
+	size_t pos = 0;
+	size_t pos2 = 0;
+	std::string temp;
+	std::map<std::string, std::string> channels;
+	while ((pos = channel.find(',')) != std::string::npos)
+	{
+		if ((pos2 = pass.find(',')) != std::string::npos)
+		{
+			if(pos2 == 0 && pass[0] == ',')
+				temp = "";
+			else
+				temp = pass.substr(0, pos2);
+			pass = pass.substr(pos2 + 1, pass.size());
+		}
+		else if (pass[0]){
+			if(pos2 == std::string::npos)
+				temp = pass.substr(0, pass.size());
+			else
+				temp = pass.substr(0, pos2);
+			pass = "";
+		}
+		else
+			temp = "";
+		std::cout << "pass    " << pass << std::endl;
+		std::cout << "channel    " << channel << std::endl;
+		channels.insert(std::pair<std::string, std::string>(channel.substr(0, pos), temp));
+		channel = channel.substr(pos + 1, channel.size());
+		if (channel[0] == ','){
+			_sendMsg2(fd, ERR_BADCHANMASK("JOIN"));
+			*check = 1;
+		}
+		pos = 0;
+		pos2 = 0;
+		temp = "";
+	}
+	if (pass[0]){
+		pos2 = pass.find(',');
+		if(pos2 == std::string::npos){
+			temp = pass.substr(0, pass.size());
+			pass = "";
+		}
+		else{
+			temp = pass.substr(0, pos2);
+			pass = pass.substr(pos2 + 1, pass.size());
+		}	
+	}
+	channels.insert(std::pair<std::string, std::string>(channel.substr(0, pos), temp));
+	if (pass[0]){
+		_sendMsg2(fd, ERR_NEEDMOREPARAMS("JOIN"));
+		*check = 1;
+	}
+	return channels;
+}
+
+bool parseChan(std::map<std::string, std::string>::const_iterator it, int fd){
+	if (it->first[0] != '&' && it->first[0] != '#')
+	{
+		_sendMsg2(fd, ERR_BADCHANMASK("JOIN"));
+		return false;
+	}
+	if (it->first.find(7) != std::string::npos)
+	{
+		_sendMsg2(fd, ERR_BADCHANMASK("JOIN"));
+		return false;
+	}
+	if (it->first.size() > 200)
+	{
+		_sendMsg2(fd, ERR_BADCHANMASK("JOIN"));
+		return false;
+	}
+	return true;
+}
+
+bool Server::buildChan(std::map<std::string, std::string>::const_iterator channels, int fd){
+	std::map<std::string, Channel>::iterator it = _channels.find(channels->first);
+	std::stringstream ss;
+	if(it == _channels.end()){
+		Channel newChan(channels->first);
+		if(channels->second != "")
+			newChan.setPass(channels->second);
+		newChan.addMember(fd);
+		_channels.insert(std::pair<std::string, Channel>(channels->first, newChan));
+		ss << ":" << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost" << " JOIN :" << channels->first << "\r\n"; //":nick!user@host JOIN :#channel"
+		_sendMsg(fd, ss.str());
+		ss.str("");
+		ss.clear();
+		ss << ":" << _serverName << " 353 " << _clients[fd].getNickname()  << " = " << channels->first << " :@" << _clients[fd].getNickname() << "\r\n";
+		_sendMsg(fd, ss.str());
+		ss.str("");
+		ss.clear();
+		ss << ":" << _serverName << " 366 " << _clients[fd].getNickname() << " " << channels->first << " :End of /NAMES list." <<"\r\n";
+		_sendMsg(fd, ss.str());
+		return true;
+	}
+	if(it->second.isFull()){
+		return false;
+	}
+	if(it->second.isInviteOnly() && !it->second.isInvited(fd)){
+		return false;
+	}
+	if(it->second.hasPass() && it->second.getPass() != channels->second){
+		return false;
+	}
+	it->second.addMember(fd);
+	ss << ":" << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost" << " JOIN :" << channels->first << "\r\n"; //":nick!user@host JOIN :#channel"
+	_sendMsg(fd, ss.str());
+	ss.str("");
+	ss.clear();
+	ss << ":" << _serverName << " 353 " << _clients[fd].getNickname()  << " = " << channels->first << " :@" << _clients[fd].getNickname() << "\r\n";
+	_sendMsg(fd, ss.str());
+	ss.str("");
+	ss.clear();
+	ss << ":" << _serverName << " 366 " << _clients[fd].getNickname() << " " << channels->first << " :End of /NAMES list." <<"\r\n";
+	_sendMsg(fd, ss.str());
+	return true;
+}
+
+//"353 " + sender + " = " + channel + " :" + users
+//"366 " + sender + " " + channel + " :End of /NAMES list."
+
+bool Server::_handleJoin(int fd, std::string line)
+{
+	std::istringstream iss(line);
+	std::string channel;
+	std::string pass;
+	std::string check_no;
+	std::map<std::string, std::string> channels;
+	int check = 0;
+
+	iss >> check_no;
+	iss >> channel;
+	iss >> pass;
+	iss >> check_no;
+	if (check_no != "JOIN")
+	{
+		_sendMsg2(fd, ERR_TOOMANYTARGETS("JOIN"));
+		return false;
+	}
+	if (channel.empty())
+	{
+		_sendMsg2(fd, ERR_NEEDMOREPARAMS("JOIN"));
+		return false;
+	}
+	channels = buildMap(channel, pass, fd, &check);
+	if(check)
+		return false;
+	std::map<std::string, std::string>::const_iterator it;
+    for (it = channels.begin(); it != channels.end(); it++) {
+		if(!parseChan(it, fd))
+			return false;
+    }
+	bool ret = true;
+	for (it = channels.begin(); it != channels.end(); it++) {
+		if(!buildChan(it, fd))
+			ret = false;
+    }
+	return ret;
+}
+
+int Server::_userToFd(std::string username, int fd, std::string cmdErr){
+	std::map<int, Client>::iterator uname;
+	for(uname = _clients.begin(); uname != _clients.end(); uname++){
+		if(uname->second.getNickname() == username)
+			break;
+	}
+	if(uname == _clients.end()){
+		_sendMsg2(fd, ERR_BADCHANMASK(cmdErr));
+		return false;
+	}
+	return uname->second.getClientFD();
+}
+
+bool Server::_handleKick(int fd, std::string line)
+{
+	std::istringstream iss(line);
+	std::string check_no;
+	std::string channel;
+	std::string username;
+	std::string comment;
+	std::stringstream ss;
+	int user;
+
+	iss >> check_no;
+	iss >> channel;
+	iss >> username;
+	iss >> comment;
+	iss >> check_no;
+	if (check_no != "KICK")
+	{
+		_sendMsg2(fd, ERR_TOOMANYTARGETS("KICK"));
+		return false;
+	}
+	if(channel == "" || username == ""){
+		_sendMsg2(fd, ERR_NEEDMOREPARAMS("KICK"));
+		return false;
+	}
+	std::map<std::string, Channel>::iterator it;
+	it = _channels.find(channel);
+	if(it == _channels.end()){
+		_sendMsg2(fd, ERR_BADCHANMASK("KICK"));
+		return false;
+	}
+	user = _userToFd(username, fd, "KICK");
+	if(!it->second.isMember(fd) || !it->second.isOperator(fd) || !it->second.isMember(user) || it->second.isOperator(user))
+	{
+		_sendMsg2(fd, ERR_NOSUCHNICK("KICK"));
+		return false;
+	}
+	it->second.removeMember(user);
+	const std::set<int> &members = it->second.getMembers();
+	std::set<int>::const_iterator iter;
+	ss << fd << ": Kicked " << user << " from " << channel;
+	if(comment != "")
+		ss << " because " << comment;
+	ss << '.' << std::endl;
+	for (iter = members.begin(); iter != members.end(); it++){
+		_sendMsg(*iter, ss.str());
+	}
+	return true;
+}
+
+bool Server::_handleInvite(int fd, std::string line)
+{
+	std::istringstream iss(line);
+	std::string check_no;
+	std::string username;
+	std::string channel;
+	int user;
+
+	iss >> check_no;
+	iss >> username;
+	iss >> channel;
+	iss >> check_no;
+	if (check_no != "INVITE")
+	{
+		_sendMsg2(fd, ERR_TOOMANYTARGETS("INVITE"));
+		return false;
+	}
+	if(channel == "" || username == ""){
+		_sendMsg2(fd, ERR_NEEDMOREPARAMS("INVITE"));
+		return false;
+	}
+	std::map<std::string, Channel>::iterator it;
+	it = _channels.find(channel);
+	if(it == _channels.end()){
+		_sendMsg2(fd, ERR_BADCHANMASK("INVITE"));
+		return false;
+	}
+	if(!it->second.isInviteOnly() && !it->second.hasPass()){
+		return false;
+	}
+	user = _userToFd(username, fd, "INVITE");
+	it->second.invite(user);
+	return true;
+}
+
+
 bool Server::_processCommand(int fd, std::string line) {
 	std::istringstream iss(line);
 	std::string command;
@@ -101,18 +360,8 @@ bool Server::_processCommand(int fd, std::string line) {
 	{
 		_handleHelp(fd);
 	}
-	//else if (command == "JOIN")
-	//{
-	//	_handleJoin(fd);
-	//}
-	//else if (command == "KICK")
-	//{
-	//	_handleKick(fd);
-	//}
-	//else if (command == "INVITE")
-	//{
-	//	_handleInvite(fd);
-	//}
+	
+	
 	//else if (command == "TOPIC")
 	//{
 	//	_handleTopic(fd);
@@ -121,15 +370,66 @@ bool Server::_processCommand(int fd, std::string line) {
 	//{
 	//	_handleMode(fd);
 	//}
-	if (_clients[fd].getPassword() && !_clients[fd].getNickname().empty() && !_clients[fd].getUsername().empty())
+	if (_clients[fd].getAuth() == false && _clients[fd].getPassword() && !_clients[fd].getNickname().empty() && !_clients[fd].getUsername().empty())
 	{
 		_clients[fd].setAuth(true);
 		// Created a welcome message according to IRC standards, Need to change servername.
 		std::stringstream ss;
-		ss << ":" << _serverName << " 001 " << _clients[fd].getNickname() << ":Welcome to the Internet Relay Network " << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost\r\n"; 
+		ss << ":" << _serverName << " 001 " << _clients[fd].getNickname() << " :Welcome to the Internet Relay Network " << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost\r\n"; 
 		_sendMsg(fd, ss.str());
 	}
+	if (_clients[fd].getAuth() == true){
+		if (command == "JOIN")
+		{
+			_handleJoin(fd, line);
+		}
+		else if (command == "KICK")
+		{
+			_handleKick(fd, line);
+		}
+		else if (command == "INVITE")
+		{
+			_handleInvite(fd, line);
+		}
+		else if (command == "PRIVMSG")
+		{
+			_handleMsg(fd, line);
+		}
+	}
+	if(command[0] == '#')
+		broadcastToChannel(command, param, fd); //temporary for testing broadcast to channel function; usage: 'channel' 'msg'.
 	return true;
+}
+
+void	Server::_handleMsg(int fd, std::string line){
+	std::istringstream iss(line);
+	std::string check_no;
+	std::string username;
+	std::string msg;
+	int user;
+
+	iss >> check_no;
+	iss >> username;
+	iss >> msg;
+	iss >> check_no;
+	user = _userToFd(username, fd, "TEST");
+	std::stringstream ss;
+	ss << ":" << _clients[fd].getNickname() << " PRIVMSG " << username << " " << msg << std::endl;
+	_sendMsg(user, ss.str());
+}
+
+void	Server::broadcastToChannel(std::string chanName, std::string msg, int fd){
+	std::map<std::string, Channel>::iterator finder;
+	std::stringstream ss;
+	finder = _channels.find(chanName);
+	if(finder == _channels.end())
+		return ;
+	const std::set<int> &members = finder->second.getMembers();
+	std::set<int>::const_iterator it;
+	ss << finder->second.getName() << ", "<<_clients[fd].getNickname() << ": " << msg << std::endl;
+	for (it = members.begin(); it != members.end(); it++){
+		_sendMsg(*it, ss.str());
+	}
 }
 
 bool Server::_processBuffer(int fd) {

@@ -15,6 +15,9 @@
 #include <csignal>
 #include <cerrno>
 #include "Client.hpp"
+#include "Channel.hpp"
+
+class Channel;
 
 class Server {
 	private:
@@ -29,6 +32,7 @@ class Server {
 		//std::map<int, std::string> _nicknames; // will be deleted after the migration to the Client Class
 		//std::map<int, std::string> _usernames; // will be deleted after the migration to the Client Class
 		std::map<int, Client> _clients;
+		std::map<std::string, Channel> _channels;
 		void _setupSocket();
 		void _loopServer();
 		void _acceptNewClient();
@@ -39,9 +43,15 @@ class Server {
 		bool _handleNick(int fd, std::string nick);
 		bool _handleUser(int fd, std::string user);
 		void _handleHelp(int fd);
+		bool _handleJoin(int fd, std::string line);
+		bool _handleKick(int fd, std::string line);
+		bool _handleInvite(int fd, std::string line);
+		void _handleMsg(int fd, std::string line);
+		bool buildChan(std::map<std::string, std::string>::const_iterator channel, int fd);
+		void	broadcastToChannel(std::string chanName, std::string msg, int fd);
 		bool _checkDupes(std::string type, std::string toCheck) const;
 		//Helpers / Errors
-
+		int _userToFd(std::string username, int fd, std::string cmdErr);
 		void _sendMsg(int fd, std::string msg);
 		void _removeClient(int fd);
 
