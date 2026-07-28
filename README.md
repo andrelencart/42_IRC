@@ -314,7 +314,7 @@ Then send:
 ```text
 PASS pass
 NICK user1
-USER user1
+USER user1 0 * :<name>
 JOIN #test
 ```
 
@@ -323,7 +323,7 @@ With two clients:
 ```text
 PASS pass
 NICK user2
-USER user2
+USER user2  0 * :<name>
 JOIN #test
 PRIVMSG user1 :hello
 ```
