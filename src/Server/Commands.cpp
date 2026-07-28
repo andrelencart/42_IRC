@@ -205,6 +205,44 @@ bool Server::_handleInvite(int fd, std::string line)
 	return true;
 }
 
+bool Server::_handleTopic(int fd, std::string line) {
+	std::istringstream iss(line);
+	std::vector<std::string>params;
+	std::string token;
+	std::string topic;
+	
+	while (iss >> token)
+		params.push_back(token);
+	size_t pos = line.find(':');
+	if (pos != std::string::npos)
+		topic = line.substr(pos + 1);
+
+	if (params.size() < 2){
+		_sendMsg(fd, ERR_NEEDMOREPARAMS("TOPIC"));
+		return false;
+	}
+
+	Channel *channel = _getChannel(params[1]);
+	if (channel == NULL){
+		_sendMsg(fd, ERR_NOSUCHCHANNEL(params[1]));
+		return false;
+	}
+	if (!channel->isMember(fd)){
+		_sendMsg(fd, ERR_NOTONCHANNEL(params[1]));
+		return false;
+	}
+	if (topic.empty()){
+		if (channel->getTopic().empty())
+			_sendMsg(fd, RPL_NOTOPIC(_clients[fd].getNickname(), channel->getName()));
+		else
+			_sendMsg(fd, RPL_TOPIC(_clients[fd].getNickname(), channel->getName(), channel->getTopic()));
+		return true;
+	}
+	channel->setTopic(topic);
+	// Needs to broadcast the msg to all channel members
+	return true;
+}
+
 bool Server::_processCommand(int fd, std::string line) {
 	std::istringstream iss(line);
 	std::string command;
@@ -235,10 +273,10 @@ bool Server::_processCommand(int fd, std::string line) {
 	}
 	
 	
-	//else if (command == "TOPIC")
-	//{
-	//	_handleTopic(fd);
-	//}
+	else if (command == "TOPIC")
+	{
+		_handleTopic(fd, line);
+	}
 	//else if (command == "MODE")
 	//{
 	//	_handleMode(fd);

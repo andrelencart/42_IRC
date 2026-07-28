@@ -45,15 +45,17 @@ class Server {
 		void _handleHelp(int fd);
 		bool _handleJoin(int fd, std::string line);
 		bool _handleKick(int fd, std::string line);
+		bool _handleTopic(int fd, std::string line);
 		bool _handleInvite(int fd, std::string line);
 		void _handleMsg(int fd, std::string line);
 		bool buildChan(std::map<std::string, std::string>::const_iterator channel, int fd);
-		void	broadcastToChannel(std::string chanName, std::string msg, int fd);
+		void broadcastToChannel(std::string chanName, std::string msg, int fd);
 		bool _checkDupes(std::string type, std::string toCheck) const;
 		bool _nickInUse(std::string nick, int currentFd) const;
 		//Helpers / Errors
 		int _userToFd(std::string username, int fd, std::string cmdErr);
 		void _removeClient(int fd);
+		Channel *_getChannel(std::string channelName);
 
 		Server(const Server& other);
 		Server& operator=(const Server& other);
@@ -122,5 +124,7 @@ void _sendMsg(int fd, std::string msg);
 #define ERR_NOOPERHOST()              		(std::string("491 :No O-lines for your host\r\n"))
 #define ERR_UMODEUNKNOWNFLAG()        		(std::string("501 :Unknown MODE flag\r\n"))
 #define ERR_USERSDONTMATCH()          		(std::string("502 :Cannot change mode for other users\r\n"))
+#define RPL_NOTOPIC(nick, chan) (std::string("331 ") + (nick) + " " + (chan) + " :No topic is set\r\n")
+#define RPL_TOPIC(nick, chan, topic) (std::string("332 ") + (nick) + " " + (chan) + " :" + (topic) + "\r\n")
 
 #endif
