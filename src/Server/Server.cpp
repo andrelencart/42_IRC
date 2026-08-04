@@ -32,6 +32,15 @@ Server::~Server() {
 	std::cout << "Server Shutdown!" << std::endl;
 }
 
+Channel* Server::_getChannel(std::string channelName) {
+	std::map<std::string, Channel>::iterator it = _channels.find(channelName);
+
+	if (it == _channels.end())
+		return NULL;
+
+	return &(it->second);
+}
+
 void Server::_setupSocket() {
 	_servFd = socket(AF_INET, SOCK_STREAM, 0); //Creates a TCP socket. AF_INET = IPv4, SOCK_STREAM = TCP (reliable, ordered). Returns a file descriptor (_servFd)
 	if (_servFd == -1)

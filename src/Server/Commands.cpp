@@ -128,7 +128,6 @@ bool Server::_handleKick(int fd, std::string line)
 	std::string channel;
 	std::string username;
 	std::string comment;
-	std::stringstream ss;
 	int user;
 
 	iss >> check_no;
@@ -157,16 +156,10 @@ bool Server::_handleKick(int fd, std::string line)
 		_sendMsg(fd, ERR_NOSUCHNICK("KICK"));
 		return false;
 	}
+	if (comment.size() > 0 && comment[0] == ':')
+		comment = comment.substr(1);
+	_broadcastChannelCommand(fd, it->second, "KICK", username, comment);
 	it->second.removeMember(user);
-	const std::set<int> &members = it->second.getMembers();
-	std::set<int>::const_iterator iter;
-	ss << fd << ": Kicked " << user << " from " << channel;
-	if(comment != "")
-		ss << " because " << comment;
-	ss << '.' << std::endl;
-	for (iter = members.begin(); iter != members.end(); it++){
-		_sendMsg(*iter, ss.str());
-	}
 	return true;
 }
 
@@ -205,6 +198,44 @@ bool Server::_handleInvite(int fd, std::string line)
 	return true;
 }
 
+bool Server::_handleTopic(int fd, std::string line) {
+	std::istringstream iss(line);
+	std::vector<std::string>params;
+	std::string token;
+	std::string topic;
+	
+	while (iss >> token)
+		params.push_back(token);
+	size_t pos = line.find(':');
+	if (pos != std::string::npos)
+		topic = line.substr(pos + 1);
+
+	if (params.size() < 2){
+		_sendMsg(fd, ERR_NEEDMOREPARAMS("TOPIC"));
+		return false;
+	}
+
+	Channel *channel = _getChannel(params[1]);
+	if (channel == NULL){
+		_sendMsg(fd, ERR_NOSUCHCHANNEL(params[1]));
+		return false;
+	}
+	if (!channel->isMember(fd)){
+		_sendMsg(fd, ERR_NOTONCHANNEL(params[1]));
+		return false;
+	}
+	if (topic.empty()){
+		if (channel->getTopic().empty())
+			_sendMsg(fd, RPL_NOTOPIC(_clients[fd].getNickname(), channel->getName()));
+		else
+			_sendMsg(fd, RPL_TOPIC(_clients[fd].getNickname(), channel->getName(), channel->getTopic()));
+		return true;
+	}
+	channel->setTopic(topic);
+	_broadcastChannelCommand(fd, *channel, "TOPIC", "", topic);
+	return true;
+}
+
 bool Server::_processCommand(int fd, std::string line) {
 	std::istringstream iss(line);
 	std::string command;
@@ -235,10 +266,10 @@ bool Server::_processCommand(int fd, std::string line) {
 	}
 	
 	
-	//else if (command == "TOPIC")
-	//{
-	//	_handleTopic(fd);
-	//}
+	else if (command == "TOPIC")
+	{
+		_handleTopic(fd, line);
+	}
 	//else if (command == "MODE")
 	//{
 	//	_handleMode(fd);
@@ -280,13 +311,38 @@ void	Server::_handleMsg(int fd, std::string line){
 	std::string username;
 	std::string msg;
 	int user;
+	size_t pos;
 
 	iss >> check_no;
 	iss >> username;
-	iss >> msg;
-	iss >> check_no;
-	user = _userToFd(username, fd, "TEST");
+	pos = line.find(':');
+	if (pos != std::string::npos)
+		msg = line.substr(pos + 1);
+	else
+		iss >> msg;
+	if (username.empty()){
+		_sendMsg(fd, ERR_NORECIPIENT("PRIVMSG"));
+		return ;
+	}
+	if (msg.empty()){
+		_sendMsg(fd, ERR_NOTEXTTOSEND());
+		return ;
+	}
+	if (username[0] == '#' || username[0] == '&'){
+		Channel *channel = _getChannel(username);
+		if (channel == NULL){
+			_sendMsg(fd, ERR_NOSUCHCHANNEL(username));
+			return ;
+		}
+		if (!channel->isMember(fd)){
+			_sendMsg(fd, ERR_CANNOTSENDTOCHAN(username));
+			return ;
+		}
+		_broadcastChannelCommand(fd, *channel, "PRIVMSG", "", msg, fd);
+		return ;
+	}
+	user = _userToFd(username, fd, "PRIVMSG");
 	std::stringstream ss;
-	ss << ":" << _clients[fd].getNickname() << " PRIVMSG " << username << " " << msg << std::endl;
+	ss << _clientPrefix(fd) << " PRIVMSG " << username << " :" << msg << "\r\n";
 	_sendMsg(user, ss.str());
 }
