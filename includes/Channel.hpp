@@ -21,8 +21,9 @@ class Channel
 		std::string	_pass;
 		std::string	_topic;
 		bool	_hasPass;
-		size_t		_userLimit;
+		int		_userLimit;
 		bool	_inviteOnly;
+		bool	_topicRestricted;
 		std::set<int>	_members;
 		std::set<int>	_operators;
 		std::set<int>	_invited;
@@ -43,6 +44,7 @@ class Channel
 		std::string	getTopic() const;
 		bool hasPass() const;
 		bool isInviteOnly() const;
+		bool isTopicRestricted() const;
 		bool isOperator(int fd) const;
 		int	getUserLimit() const;
 		bool isInvited(int fd) const;
@@ -53,8 +55,10 @@ class Channel
 
 		// Setters
 		void setPass(std::string pass);
+		void removePass();
 		void setTopic(std::string topic);
 		void setInviteOnly(bool i);
+		void setTopicRestricted(bool restricted);
 		void setUserLimit(int limit);
 
 		//Others

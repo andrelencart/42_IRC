@@ -74,6 +74,22 @@ bool parseChan(std::map<std::string, std::string>::const_iterator it, int fd){
 	return true;
 }
 
+std::string Server::_buildNamesList(const Channel &channel)
+{
+	std::stringstream ss;
+	const std::set<int> &members = channel.getMembers();
+
+	for (std::set<int>::const_iterator it = members.begin(); it != members.end(); it++)
+	{
+		if (it != members.begin())
+			ss << " ";
+		if (channel.isOperator(*it))
+			ss << "@";
+		ss << _clients[*it].getNickname();
+	}
+	return ss.str();
+}
+
 bool Server::buildChan(std::map<std::string, std::string>::const_iterator channels, int fd){
 	std::map<std::string, Channel>::iterator it = _channels.find(channels->first);
 	std::stringstream ss;
@@ -82,9 +98,10 @@ bool Server::buildChan(std::map<std::string, std::string>::const_iterator channe
 		if(channels->second != "")
 			newChan.setPass(channels->second);
 		newChan.addMember(fd);
+		newChan.addOperator(fd);
 		_channels.insert(std::pair<std::string, Channel>(channels->first, newChan));
 		_broadcastChannelCommand(fd, _channels.find(channels->first)->second, "JOIN", "", "");
-		ss << ":" << _serverName << " 353 " << _clients[fd].getNickname()  << " = " << channels->first << " :@" << _clients[fd].getNickname() << "\r\n";
+		ss << ":" << _serverName << " 353 " << _clients[fd].getNickname()  << " = " << channels->first << " :" << _buildNamesList(_channels.find(channels->first)->second) << "\r\n";
 		_sendMsg(fd, ss.str());
 		ss.str("");
 		ss.clear();
@@ -103,7 +120,7 @@ bool Server::buildChan(std::map<std::string, std::string>::const_iterator channe
 	}
 	it->second.addMember(fd);
 	_broadcastChannelCommand(fd, it->second, "JOIN", "", "");
-	ss << ":" << _serverName << " 353 " << _clients[fd].getNickname()  << " = " << channels->first << " :@" << _clients[fd].getNickname() << "\r\n";
+	ss << ":" << _serverName << " 353 " << _clients[fd].getNickname()  << " = " << channels->first << " :" << _buildNamesList(it->second) << "\r\n";
 	_sendMsg(fd, ss.str());
 	ss.str("");
 	ss.clear();

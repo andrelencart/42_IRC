@@ -1,8 +1,8 @@
 #include "../../includes/Channel.hpp"
 
-Channel::Channel() : _name("#default"), _topic(""), _hasPass(false), _userLimit(-1), _inviteOnly(false) {};
+Channel::Channel() : _name("#default"), _topic(""), _hasPass(false), _userLimit(0), _inviteOnly(false), _topicRestricted(false) {};
 
-Channel::Channel(std::string channel) : _name(channel), _topic(""), _hasPass(false), _userLimit(-1), _inviteOnly(false){};
+Channel::Channel(std::string channel) : _name(channel), _topic(""), _hasPass(false), _userLimit(0), _inviteOnly(false), _topicRestricted(false){};
 
 Channel::Channel(const Channel &other)
 {
@@ -19,6 +19,7 @@ Channel &Channel::operator=(const Channel &other)
 		_hasPass = other._hasPass;
 		_userLimit = other._userLimit;
 		_inviteOnly = other._inviteOnly;
+		_topicRestricted = other._topicRestricted;
 		_members = other._members;
 		_operators = other._operators;
 		_invited = other._invited;
@@ -49,6 +50,10 @@ bool Channel::isInviteOnly() const{
 	return _inviteOnly;
 }
 
+bool Channel::isTopicRestricted() const{
+	return _topicRestricted;
+}
+
 int	Channel::getUserLimit() const{
 	return _userLimit;
 }
@@ -74,13 +79,15 @@ bool Channel::isOperator(int fd) const{
 }
 
 bool	Channel::isInvited(int fd) const{
-	if(_members.find(fd) != _members.end())
+	if(_invited.find(fd) != _invited.end())
 		return true;
 	return false;
 }
 
 bool	Channel::isFull() const{
-	if (getMemberCount() >= _userLimit)
+	if (_userLimit == 0)
+		return false;
+	if (static_cast<int>(getMemberCount()) >= _userLimit)
 		return true;
 	return false;
 }
@@ -92,12 +99,21 @@ void Channel::setPass(std::string pass){
 	_pass = pass;
 }
 
+void Channel::removePass(){
+	_hasPass = false;
+	_pass = "";
+}
+
 void Channel::setTopic(std::string topic){
 	_topic = topic;
 }
 
 void Channel::setInviteOnly(bool i){
 	_inviteOnly = i;
+}
+
+void Channel::setTopicRestricted(bool restricted){
+	_topicRestricted = restricted;
 }
 
 void Channel::setUserLimit(int limit){
