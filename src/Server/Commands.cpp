@@ -236,44 +236,60 @@ bool Server::_handleTopic(int fd, std::string line) {
 	return true;
 }
 
-bool Server::_processCommand(int fd, std::string line) {
-	std::istringstream iss(line);
-	std::string command;
-	std::string param;
+bool Server::_handleMode(int fd, std::string line) {
+	(void)fd;
+	(void)line;
+	return true;
+}
 
-	// Handle functions recebiam o "iss" e eu mudei para "param" para receber o valor diretamente
-	iss >> command;
-	iss >> param;
-	if (command != "PASS" && !_clients[fd].getPassword()){
-		_sendMsg(fd, ":server 451 * :You have not registered\r\n");
+void Server::_initCommandHandlers() {
+	_commandHandlers["JOIN"] = &Server::_handleJoin;
+	_commandHandlers["KICK"] = &Server::_handleKick;
+	_commandHandlers["INVITE"] = &Server::_handleInvite;
+	_commandHandlers["TOPIC"] = &Server::_handleTopic;
+	_commandHandlers["MODE"] = &Server::_handleMode;
+}
+
+bool Server::_dispatchCommand(int fd, std::string command, std::string line) {
+	std::map<std::string, CommandHandler>::iterator it = _commandHandlers.find(command);
+
+	if (it != _commandHandlers.end())
+		return (this->*(it->second))(fd, line);
+	if (command == "PRIVMSG")
+	{
+		_handleMsg(fd, line);
 		return true;
 	}
+	return false;
+}
+
+bool Server::_checkPasswordRegistration(int fd, std::string command) {
+	if (command != "PASS" && !_clients[fd].getPassword()){
+		_sendMsg(fd, ":server 451 * :You have not registered\r\n");
+		return false;
+	}
+	return true;
+}
+
+bool Server::_dispatchRegistrationCommand(int fd, std::string command, std::string param, std::string line) {
 	if (command == "PASS"){
 		if (!_handlePass(fd, param))
 			return false;
 	}
 	else if (command == "NICK"){
 		_handleNick(fd, param);
-			
 	}
 	else if (command == "USER"){
 		_handleUser(fd, line);
-		
 	}
 	else if (command == "HELP")
 	{
 		_handleHelp(fd);
 	}
-	
-	
-	else if (command == "TOPIC")
-	{
-		_handleTopic(fd, line);
-	}
-	//else if (command == "MODE")
-	//{
-	//	_handleMode(fd);
-	//}
+	return true;
+}
+
+void Server::_tryAuthenticateClient(int fd) {
 	if (_clients[fd].getAuth() == false && _clients[fd].getPassword() && !_clients[fd].getNickname().empty() && !_clients[fd].getUsername().empty())
 	{
 		_clients[fd].setAuth(true);
@@ -282,24 +298,23 @@ bool Server::_processCommand(int fd, std::string line) {
 		ss << ":" << _serverName << " 001 " << _clients[fd].getNickname() << " :Welcome to the Internet Relay Network " << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost\r\n"; 
 		_sendMsg(fd, ss.str());
 	}
-	if (_clients[fd].getAuth() == true){
-		if (command == "JOIN")
-		{
-			_handleJoin(fd, line);
-		}
-		else if (command == "KICK")
-		{
-			_handleKick(fd, line);
-		}
-		else if (command == "INVITE")
-		{
-			_handleInvite(fd, line);
-		}
-		else if (command == "PRIVMSG")
-		{
-			_handleMsg(fd, line);
-		}
-	}
+}
+
+bool Server::_processCommand(int fd, std::string line) {
+	std::istringstream iss(line);
+	std::string command;
+	std::string param;
+
+	// Handle functions recebiam o "iss" e eu mudei para "param" para receber o valor diretamente
+	iss >> command;
+	iss >> param;
+	if (!_checkPasswordRegistration(fd, command))
+		return true;
+	if (!_dispatchRegistrationCommand(fd, command, param, line))
+		return false;
+	_tryAuthenticateClient(fd);
+	if (_clients[fd].getAuth() == true)
+		_dispatchCommand(fd, command, line);
 	if(command[0] == '#')
 		broadcastToChannel(command, param, fd); //temporary for testing broadcast to channel function; usage: 'channel' 'msg'.
 	return true;

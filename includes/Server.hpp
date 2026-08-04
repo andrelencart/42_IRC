@@ -21,6 +21,8 @@ class Channel;
 
 class Server {
 	private:
+		typedef bool (Server::*CommandHandler)(int, std::string);
+
 		int _port;
 		std::string _password;
 		std::string _serverName; //Added server name
@@ -33,12 +35,18 @@ class Server {
 		//std::map<int, std::string> _usernames; // will be deleted after the migration to the Client Class
 		std::map<int, Client> _clients;
 		std::map<std::string, Channel> _channels;
+		std::map<std::string, CommandHandler> _commandHandlers;
 		void _setupSocket();
 		void _loopServer();
 		void _acceptNewClient();
 		bool _handleClient(int fd);
 		bool _processBuffer(int fd);
 		bool _processCommand(int fd, std::string line);
+		void _initCommandHandlers();
+		bool _dispatchCommand(int fd, std::string command, std::string line);
+		bool _checkPasswordRegistration(int fd, std::string command);
+		bool _dispatchRegistrationCommand(int fd, std::string command, std::string param, std::string line);
+		void _tryAuthenticateClient(int fd);
 		bool _handlePass(int fd, std::string password);
 		bool _handleNick(int fd, std::string nick);
 		bool _handleUser(int fd, std::string line);
@@ -46,6 +54,7 @@ class Server {
 		bool _handleJoin(int fd, std::string line);
 		bool _handleKick(int fd, std::string line);
 		bool _handleTopic(int fd, std::string line);
+		bool _handleMode(int fd, std::string line);
 		bool _handleInvite(int fd, std::string line);
 		void _handleMsg(int fd, std::string line);
 		bool buildChan(std::map<std::string, std::string>::const_iterator channel, int fd);

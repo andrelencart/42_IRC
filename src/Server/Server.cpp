@@ -20,9 +20,13 @@ void signalHandler(int sig){
 	g_stop = 1;
 }
 
-Server::Server(): _port(0), _password(""), _servFd(-1) {}
+Server::Server(): _port(0), _password(""), _servFd(-1) {
+	_initCommandHandlers();
+}
 
-Server::Server(int port, std::string password, std::string serverName): _port(port), _password(password), _serverName(serverName), _servFd(-1) {}
+Server::Server(int port, std::string password, std::string serverName): _port(port), _password(password), _serverName(serverName), _servFd(-1) {
+	_initCommandHandlers();
+}
 
 Server::~Server() {
 	for (size_t i = 1; i < _fds.size(); i++)
