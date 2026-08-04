@@ -50,6 +50,9 @@ class Server {
 		void _handleMsg(int fd, std::string line);
 		bool buildChan(std::map<std::string, std::string>::const_iterator channel, int fd);
 		void broadcastToChannel(std::string chanName, std::string msg, int fd);
+		std::string _clientPrefix(int fd);
+		void _broadcastToChannel(const Channel &channel, const std::string &msg, int exceptFd = -1);
+		void _broadcastChannelCommand(int fd, const Channel &channel, const std::string &command, const std::string &params, const std::string &trailing, int exceptFd = -1);
 		bool _checkDupes(std::string type, std::string toCheck) const;
 		bool _nickInUse(std::string nick, int currentFd) const;
 		//Helpers / Errors

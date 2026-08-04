@@ -41,6 +41,7 @@
 *.dwo
 
 CLAUDE.md
+AGENTS.md
 en.subject_ft_irc.pdf
 en.subject_ft_irc.pdf:Zone.Identifier
 .codex

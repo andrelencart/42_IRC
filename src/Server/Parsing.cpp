@@ -83,10 +83,7 @@ bool Server::buildChan(std::map<std::string, std::string>::const_iterator channe
 			newChan.setPass(channels->second);
 		newChan.addMember(fd);
 		_channels.insert(std::pair<std::string, Channel>(channels->first, newChan));
-		ss << ":" << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost" << " JOIN :" << channels->first << "\r\n"; //":nick!user@host JOIN :#channel"
-		_sendMsg(fd, ss.str());
-		ss.str("");
-		ss.clear();
+		_broadcastChannelCommand(fd, _channels.find(channels->first)->second, "JOIN", "", "");
 		ss << ":" << _serverName << " 353 " << _clients[fd].getNickname()  << " = " << channels->first << " :@" << _clients[fd].getNickname() << "\r\n";
 		_sendMsg(fd, ss.str());
 		ss.str("");
@@ -105,10 +102,7 @@ bool Server::buildChan(std::map<std::string, std::string>::const_iterator channe
 		return false;
 	}
 	it->second.addMember(fd);
-	ss << ":" << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost" << " JOIN :" << channels->first << "\r\n"; //":nick!user@host JOIN :#channel"
-	_sendMsg(fd, ss.str());
-	ss.str("");
-	ss.clear();
+	_broadcastChannelCommand(fd, it->second, "JOIN", "", "");
 	ss << ":" << _serverName << " 353 " << _clients[fd].getNickname()  << " = " << channels->first << " :@" << _clients[fd].getNickname() << "\r\n";
 	_sendMsg(fd, ss.str());
 	ss.str("");
