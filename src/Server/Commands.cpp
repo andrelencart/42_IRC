@@ -1,4 +1,5 @@
 #include "../../includes/Server.hpp"
+#include <cstdlib>
 
 void Server::_handleHelp(int fd)
 {
@@ -231,9 +232,221 @@ bool Server::_handleTopic(int fd, std::string line) {
 			_sendMsg(fd, RPL_TOPIC(_clients[fd].getNickname(), channel->getName(), channel->getTopic()));
 		return true;
 	}
+	if (channel->isTopicRestricted() && !channel->isOperator(fd)){
+		_sendMsg(fd, ERR_CHANOPRIVSNEEDED(channel->getName()));
+		return false;
+	}
 	channel->setTopic(topic);
 	_broadcastChannelCommand(fd, *channel, "TOPIC", "", topic);
 	return true;
+}
+
+bool Server::_isValidChannelMode(char mode) const {
+	return (mode == 'i' || mode == 't' || mode == 'k' || mode == 'o' || mode == 'l');
+}
+
+bool Server::_validateModeRequest(int fd, std::string channelName, std::string modeString, Channel **channel) {
+	if (channelName.empty() || modeString.empty()){
+		_sendMsg(fd, ERR_NEEDMOREPARAMS("MODE"));
+		return false;
+	}
+	*channel = _getChannel(channelName);
+	if (*channel == NULL){
+		_sendMsg(fd, ERR_NOSUCHCHANNEL(channelName));
+		return false;
+	}
+	if (!(*channel)->isMember(fd)){
+		_sendMsg(fd, ERR_NOTONCHANNEL(channelName));
+		return false;
+	}
+	if (!(*channel)->isOperator(fd)){
+		_sendMsg(fd, ERR_CHANOPRIVSNEEDED(channelName));
+		return false;
+	}
+	if (modeString[0] != '+' && modeString[0] != '-'){
+		_sendMsg(fd, ERR_UMODEUNKNOWNFLAG());
+		return false;
+	}
+	for (size_t i = 1; i < modeString.size(); i++){
+		if (!_isValidChannelMode(modeString[i])){
+			std::string unknownMode;
+			unknownMode += modeString[i];
+			_sendMsg(fd, ERR_UNKNOWNMODE(unknownMode));
+			return false;
+		}
+	}
+	return true;
+}
+
+bool Server::_applyKeyMode(int fd, Channel *channel, std::string &modeString, std::string modeParam) {
+	if (modeString == "+k"){
+		if (modeParam.empty()){
+			_sendMsg(fd, ERR_NEEDMOREPARAMS("MODE"));
+			return false;
+		}
+		channel->setPass(modeParam);
+		modeString += " " + modeParam;
+	}
+	else
+		channel->removePass();
+	return true;
+}
+
+int Server::_findClientFdByNick(std::string nick) const {
+	std::map<int, Client>::const_iterator client = _clients.begin();
+
+	while (client != _clients.end()){
+		if (client->second.getNickname() == nick)
+			return client->first;
+		client++;
+	}
+	return -1;
+}
+
+bool Server::_applyOperatorMode(int fd, Channel *channel, std::string channelName, std::string &modeString, std::string modeParam) {
+	if (modeParam.empty()){
+		_sendMsg(fd, ERR_NEEDMOREPARAMS("MODE"));
+		return false;
+	}
+	int targetFd = _findClientFdByNick(modeParam);
+	if (targetFd == -1){
+		_sendMsg(fd, ERR_NOSUCHNICK(modeParam));
+		return false;
+	}
+	if (!channel->isMember(targetFd)){
+		_sendMsg(fd, ERR_USERNOTINCHANNEL(modeParam, channelName));
+		return false;
+	}
+	if (modeString == "+o")
+		channel->addOperator(targetFd);
+	else
+		channel->removeOperator(targetFd);
+	modeString += " " + modeParam;
+	return true;
+}
+
+bool Server::_applyLimitMode(int fd, Channel *channel, std::string &modeString, std::string modeParam) {
+	if (modeString == "-l"){
+		channel->setUserLimit(0);
+		return true;
+	}
+	if (modeParam.empty()){
+		_sendMsg(fd, ERR_NEEDMOREPARAMS("MODE"));
+		return false;
+	}
+	for (size_t i = 0; i < modeParam.size(); i++){
+		if (!isdigit(modeParam[i])){
+			_sendMsg(fd, ERR_NEEDMOREPARAMS("MODE"));
+			return false;
+		}
+	}
+	int limit = std::atoi(modeParam.c_str());
+	if (limit <= 0){
+		_sendMsg(fd, ERR_NEEDMOREPARAMS("MODE"));
+		return false;
+	}
+	channel->setUserLimit(limit);
+	modeString += " " + modeParam;
+	return true;
+}
+
+bool Server::_applyMode(int fd, Channel *channel, std::string channelName, std::string &modeString, std::string modeParam) {
+	if (modeString == "+i")
+		channel->setInviteOnly(true);
+	else if (modeString == "-i")
+		channel->setInviteOnly(false);
+	else if (modeString == "+t")
+		channel->setTopicRestricted(true);
+	else if (modeString == "-t")
+		channel->setTopicRestricted(false);
+	else if (modeString == "+k" || modeString == "-k")
+		return _applyKeyMode(fd, channel, modeString, modeParam);
+	else if (modeString == "+o" || modeString == "-o")
+		return _applyOperatorMode(fd, channel, channelName, modeString, modeParam);
+	else if (modeString == "+l" || modeString == "-l")
+		return _applyLimitMode(fd, channel, modeString, modeParam);
+	else
+		return true;
+	return true;
+}
+
+bool Server::_handleMode(int fd, std::string line) {
+	std::istringstream iss(line);
+	std::string command;
+	std::string channelName;
+	std::string modeString;
+	std::string modeParam;
+	Channel *channel;
+
+	iss >> command;
+	iss >> channelName;
+	iss >> modeString;
+	iss >> modeParam;
+
+	if (!_validateModeRequest(fd, channelName, modeString, &channel))
+		return false;
+	if (!_applyMode(fd, channel, channelName, modeString, modeParam))
+		return false;
+	_broadcastChannelCommand(fd, *channel, "MODE", modeString, "");
+	return true;
+}
+
+void Server::_initCommandHandlers() {
+	_commandHandlers["JOIN"] = &Server::_handleJoin;
+	_commandHandlers["KICK"] = &Server::_handleKick;
+	_commandHandlers["INVITE"] = &Server::_handleInvite;
+	_commandHandlers["TOPIC"] = &Server::_handleTopic;
+	_commandHandlers["MODE"] = &Server::_handleMode;
+}
+
+bool Server::_dispatchCommand(int fd, std::string command, std::string line) {
+	std::map<std::string, CommandHandler>::iterator it = _commandHandlers.find(command);
+
+	if (it != _commandHandlers.end())
+		return (this->*(it->second))(fd, line);
+	if (command == "PRIVMSG")
+	{
+		_handleMsg(fd, line);
+		return true;
+	}
+	return false;
+}
+
+bool Server::_checkPasswordRegistration(int fd, std::string command) {
+	if (command != "PASS" && !_clients[fd].getPassword()){
+		_sendMsg(fd, ":server 451 * :You have not registered\r\n");
+		return false;
+	}
+	return true;
+}
+
+bool Server::_dispatchRegistrationCommand(int fd, std::string command, std::string param, std::string line) {
+	if (command == "PASS"){
+		if (!_handlePass(fd, param))
+			return false;
+	}
+	else if (command == "NICK"){
+		_handleNick(fd, param);
+	}
+	else if (command == "USER"){
+		_handleUser(fd, line);
+	}
+	else if (command == "HELP")
+	{
+		_handleHelp(fd);
+	}
+	return true;
+}
+
+void Server::_tryAuthenticateClient(int fd) {
+	if (_clients[fd].getAuth() == false && _clients[fd].getPassword() && !_clients[fd].getNickname().empty() && !_clients[fd].getUsername().empty())
+	{
+		_clients[fd].setAuth(true);
+		// Created a welcome message according to IRC standards, Need to change servername.
+		std::stringstream ss;
+		ss << ":" << _serverName << " 001 " << _clients[fd].getNickname() << " :Welcome to the Internet Relay Network " << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost\r\n"; 
+		_sendMsg(fd, ss.str());
+	}
 }
 
 bool Server::_processCommand(int fd, std::string line) {
@@ -244,62 +457,13 @@ bool Server::_processCommand(int fd, std::string line) {
 	// Handle functions recebiam o "iss" e eu mudei para "param" para receber o valor diretamente
 	iss >> command;
 	iss >> param;
-	if (command != "PASS" && !_clients[fd].getPassword()){
-		_sendMsg(fd, ":server 451 * :You have not registered\r\n");
+	if (!_checkPasswordRegistration(fd, command))
 		return true;
-	}
-	if (command == "PASS"){
-		if (!_handlePass(fd, param))
-			return false;
-	}
-	else if (command == "NICK"){
-		_handleNick(fd, param);
-			
-	}
-	else if (command == "USER"){
-		_handleUser(fd, line);
-		
-	}
-	else if (command == "HELP")
-	{
-		_handleHelp(fd);
-	}
-	
-	
-	else if (command == "TOPIC")
-	{
-		_handleTopic(fd, line);
-	}
-	//else if (command == "MODE")
-	//{
-	//	_handleMode(fd);
-	//}
-	if (_clients[fd].getAuth() == false && _clients[fd].getPassword() && !_clients[fd].getNickname().empty() && !_clients[fd].getUsername().empty())
-	{
-		_clients[fd].setAuth(true);
-		// Created a welcome message according to IRC standards, Need to change servername.
-		std::stringstream ss;
-		ss << ":" << _serverName << " 001 " << _clients[fd].getNickname() << " :Welcome to the Internet Relay Network " << _clients[fd].getNickname() << "!" << _clients[fd].getUsername() << "@" << "localhost\r\n"; 
-		_sendMsg(fd, ss.str());
-	}
-	if (_clients[fd].getAuth() == true){
-		if (command == "JOIN")
-		{
-			_handleJoin(fd, line);
-		}
-		else if (command == "KICK")
-		{
-			_handleKick(fd, line);
-		}
-		else if (command == "INVITE")
-		{
-			_handleInvite(fd, line);
-		}
-		else if (command == "PRIVMSG")
-		{
-			_handleMsg(fd, line);
-		}
-	}
+	if (!_dispatchRegistrationCommand(fd, command, param, line))
+		return false;
+	_tryAuthenticateClient(fd);
+	if (_clients[fd].getAuth() == true)
+		_dispatchCommand(fd, command, line);
 	if(command[0] == '#')
 		broadcastToChannel(command, param, fd); //temporary for testing broadcast to channel function; usage: 'channel' 'msg'.
 	return true;
