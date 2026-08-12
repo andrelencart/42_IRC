@@ -22,6 +22,7 @@ class Client
 		bool 		_password;
 		std::string _readBuffer;
 		std::string _writeBuffer;
+		bool		_closeAfterWrite;
 		
 	public:
 
@@ -40,17 +41,21 @@ class Client
 		bool		getAuth() const { return _Auth; };
 		int			getClientFD() const { return _clientFD;  };
 		std::string getReadBuffer() const { return _readBuffer; };
-		std::string	getWriteBuffer() const { return _writeBuffer; };
+		const std::string &getWriteBuffer() const { return _writeBuffer; };
+		bool		getCloseAfterWrite() const { return _closeAfterWrite; };
 
 		// Setters
 		void	setNickname(std::string nickname){_nickname = nickname;};
 		void	setUsername(std::string username){_username = username;};
 		void	setPassword(bool check){_password = check;};
 		void	setAuth(bool Auth){ _Auth = Auth; };
+		void	setCloseAfterWrite(bool closeAfterWrite){ _closeAfterWrite = closeAfterWrite; };
 
 		//Others
 		void	appendReadBuffer(std::string toAppend);
 		void	eraseBuffer(size_t pos);
+		void	appendWriteBuffer(const std::string &message);
+		void	eraseWriteBuffer(size_t bytes);
 };
 
 

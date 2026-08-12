@@ -40,6 +40,10 @@ class Server {
 		void _loopServer();
 		void _acceptNewClient();
 		bool _handleClient(int fd);
+		bool _handleClientEvents(int fd, short revents);
+		bool _flushClientOutput(int fd);
+		void _setWritePolling(int fd, bool enabled);
+		void _sendMsg(int fd, const std::string &message);
 		bool _processBuffer(int fd);
 		bool _processCommand(int fd, std::string line);
 		void _initCommandHandlers();
@@ -64,6 +68,8 @@ class Server {
 		int _findClientFdByNick(std::string nick) const;
 		bool _handleInvite(int fd, std::string line);
 		void _handleMsg(int fd, std::string line);
+		std::map<std::string, std::string> _buildChannelMap(std::string channel, std::string pass, int fd, int *check);
+		bool _parseChannel(std::map<std::string, std::string>::const_iterator channel, int fd);
 		bool buildChan(std::map<std::string, std::string>::const_iterator channel, int fd);
 		void broadcastToChannel(std::string chanName, std::string msg, int fd);
 		std::string _buildNamesList(const Channel &channel);
@@ -74,6 +80,7 @@ class Server {
 		bool _nickInUse(std::string nick, int currentFd) const;
 		//Helpers / Errors
 		int _userToFd(std::string username, int fd, std::string cmdErr);
+		void _removeClientFromChannel(Channel &channel, int fd, const std::string &quitMessage);
 		void _removeClient(int fd);
 		Channel *_getChannel(std::string channelName);
 
@@ -90,7 +97,6 @@ class Server {
 };
 
 void signalhHandler(int sig);
-void _sendMsg(int fd, std::string msg);
 
 #define ERR_NOSUCHNICK(nick)				(std::string("401 ") + (nick) + " :No such nick/channel\r\n")
 #define ERR_NOSUCHSERVER(server)			(std::string("402 ") + (server) + " :No such server\r\n")
