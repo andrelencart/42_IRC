@@ -1,3 +1,5 @@
+*This project has been created as part of the 42 curriculum by andcarva, rmota-ma, dicosta-.*
+
 # ft_irc
 
 IRC server written in C++98 for the 42 `ft_irc` project.
@@ -320,7 +322,7 @@ Then send:
 ```text
 PASS pass
 NICK user1
-USER user1
+USER user1 0 * :<name>
 JOIN #test
 ```
 
@@ -329,7 +331,7 @@ With two clients:
 ```text
 PASS pass
 NICK user2
-USER user2
+USER user2  0 * :<name>
 JOIN #test
 PRIVMSG user1 :hello
 ```
