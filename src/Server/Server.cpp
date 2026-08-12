@@ -115,14 +115,75 @@ bool Server::_handleClient(int fd) {
 
 bool Server::_handleClientEvents(int fd, short revents) {
 	bool shouldRemove = false;
+	std::map<int, Client>::iterator client = _clients.find(fd);
 
-	if (revents & POLLIN)
+	if (client == _clients.end())
+		return true;
+	if ((revents & POLLIN) && !client->second.getCloseAfterWrite())
 		shouldRemove = _handleClient(fd);
+	if (!shouldRemove && (revents & POLLOUT))
+		shouldRemove = _flushClientOutput(fd);
 	if (!shouldRemove && (revents & (POLLERR | POLLHUP | POLLNVAL))) {
 		_removeClient(fd);
 		shouldRemove = true;
 	}
 	return shouldRemove;
+}
+
+void Server::_setWritePolling(int fd, bool enabled) {
+	for (size_t i = 0; i < _fds.size(); i++) {
+		if (_fds[i].fd != fd)
+			continue;
+		if (enabled)
+			_fds[i].events |= POLLOUT;
+		else
+			_fds[i].events &= ~POLLOUT;
+		return;
+	}
+}
+
+void Server::_sendMsg(int fd, const std::string &message) {
+	std::map<int, Client>::iterator client = _clients.find(fd);
+
+	if (client == _clients.end())
+		return;
+	client->second.appendWriteBuffer(message);
+	_setWritePolling(fd, true);
+}
+
+bool Server::_flushClientOutput(int fd) {
+	std::map<int, Client>::iterator client = _clients.find(fd);
+
+	if (client == _clients.end())
+		return true;
+	const std::string &pending = client->second.getWriteBuffer();
+	if (pending.empty()) {
+		_setWritePolling(fd, false);
+		if (client->second.getCloseAfterWrite()) {
+			_removeClient(fd);
+			return true;
+		}
+		return false;
+	}
+	ssize_t sent = send(fd, pending.c_str(), pending.size(), 0);
+	if (sent > 0) {
+		client->second.eraseWriteBuffer(static_cast<size_t>(sent));
+		if (client->second.getWriteBuffer().empty()) {
+			_setWritePolling(fd, false);
+			if (client->second.getCloseAfterWrite()) {
+				_removeClient(fd);
+				return true;
+			}
+		}
+		return false;
+	}
+	if (sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
+		return false;
+	if (sent < 0)
+		std::cerr << "send() error on fd " << fd << ": "
+			<< std::strerror(errno) << std::endl;
+	_removeClient(fd);
+	return true;
 }
 
 bool Server::_processBuffer(int fd) {
@@ -135,6 +196,8 @@ bool Server::_processBuffer(int fd) {
 		_clients[fd].eraseBuffer(pos);
 		if (!_processCommand(fd, line))
 			return false;
+		if (_clients[fd].getCloseAfterWrite())
+			return true;
 	}
 	return true;
 }
@@ -171,7 +234,7 @@ void Server::_loopServer() {
 }
 
 void Server::start() {
-	//signal(SIGPIPE, SIG_IGN); //registers a handler for the SIGPIPE signal and sets it to SIG_IGN (ignore).
+	signal(SIGPIPE, SIG_IGN);
 	_setupSocket();
 	std::cout << "Server is up on port " << _port << std::endl;
 	_loopServer();

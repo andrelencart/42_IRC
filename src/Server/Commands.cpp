@@ -18,14 +18,14 @@ bool Server::_handlePass(int fd, std::string password){
 	if (password.empty())
 	{
 		_sendMsg(fd, ERR_NEEDMOREPARAMS("PASS"));
-		_removeClient(fd);
-		return false; // disconnect fd,
+		_clients[fd].setCloseAfterWrite(true);
+		return true;
 	}
 	if (password != _password)
 	{
 		_sendMsg(fd, ERR_PASSWDMISMATCH());
-		_removeClient(fd);
-		return false;
+		_clients[fd].setCloseAfterWrite(true);
+		return true;
 	}
 	_clients[fd].setPassword(true);
 	return true;

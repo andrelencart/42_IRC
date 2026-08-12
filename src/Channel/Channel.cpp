@@ -157,8 +157,3 @@ void	Channel::invite(int fd){
 	if(_invited.find(fd) == _invited.end())
 		_invited.insert(fd);
 }
-
-void _sendMsg(int fd, std::string msg)
-{
-	send(fd, msg.c_str(), msg.size(), 0);
-}

@@ -1,6 +1,6 @@
 #include "../../includes/Server.hpp"
 
-std::map<std::string, std::string> buildMap(std::string channel, std::string pass, int fd, int *check){
+std::map<std::string, std::string> Server::_buildChannelMap(std::string channel, std::string pass, int fd, int *check){
 	size_t pos = 0;
 	size_t pos2 = 0;
 	std::string temp;
@@ -55,7 +55,7 @@ std::map<std::string, std::string> buildMap(std::string channel, std::string pas
 	return channels;
 }
 
-bool parseChan(std::map<std::string, std::string>::const_iterator it, int fd){
+bool Server::_parseChannel(std::map<std::string, std::string>::const_iterator it, int fd){
 	if (it->first[0] != '&' && it->first[0] != '#')
 	{
 		_sendMsg(fd, ERR_BADCHANMASK("JOIN"));
@@ -159,12 +159,12 @@ bool Server::_handleJoin(int fd, std::string line)
 		_sendMsg(fd, ERR_NEEDMOREPARAMS("JOIN"));
 		return false;
 	}
-	channels = buildMap(channel, pass, fd, &check);
+	channels = _buildChannelMap(channel, pass, fd, &check);
 	if(check)
 		return false;
 	std::map<std::string, std::string>::const_iterator it;
     for (it = channels.begin(); it != channels.end(); it++) {
-		if(!parseChan(it, fd))
+		if(!_parseChannel(it, fd))
 			return false;
     }
 	bool ret = true;
