@@ -40,6 +40,7 @@ class Server {
 		void _loopServer();
 		void _acceptNewClient();
 		bool _handleClient(int fd);
+		bool _handleClientEvents(int fd, short revents);
 		bool _processBuffer(int fd);
 		bool _processCommand(int fd, std::string line);
 		void _initCommandHandlers();
@@ -74,6 +75,7 @@ class Server {
 		bool _nickInUse(std::string nick, int currentFd) const;
 		//Helpers / Errors
 		int _userToFd(std::string username, int fd, std::string cmdErr);
+		void _removeClientFromChannel(Channel &channel, int fd, const std::string &quitMessage);
 		void _removeClient(int fd);
 		Channel *_getChannel(std::string channelName);
 

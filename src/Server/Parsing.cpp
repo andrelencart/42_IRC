@@ -119,6 +119,7 @@ bool Server::buildChan(std::map<std::string, std::string>::const_iterator channe
 		return false;
 	}
 	it->second.addMember(fd);
+	it->second.removeInvite(fd);
 	_broadcastChannelCommand(fd, it->second, "JOIN", "", "");
 	ss << ":" << _serverName << " 353 " << _clients[fd].getNickname()  << " = " << channels->first << " :" << _buildNamesList(it->second) << "\r\n";
 	_sendMsg(fd, ss.str());

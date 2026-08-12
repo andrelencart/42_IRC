@@ -160,7 +160,7 @@ bool Server::_handleKick(int fd, std::string line)
 	if (comment.size() > 0 && comment[0] == ':')
 		comment = comment.substr(1);
 	_broadcastChannelCommand(fd, it->second, "KICK", username, comment);
-	it->second.removeMember(user);
+	it->second.removeClient(user);
 	return true;
 }
 

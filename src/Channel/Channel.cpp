@@ -142,6 +142,17 @@ void	Channel::removeOperator(int fd){
 		_operators.erase(fd);
 }
 
+void	Channel::removeInvite(int fd){
+	if(_invited.find(fd) != _invited.end())
+		_invited.erase(fd);
+}
+
+void	Channel::removeClient(int fd){
+	removeMember(fd);
+	removeOperator(fd);
+	removeInvite(fd);
+}
+
 void	Channel::invite(int fd){
 	if(_invited.find(fd) == _invited.end())
 		_invited.insert(fd);

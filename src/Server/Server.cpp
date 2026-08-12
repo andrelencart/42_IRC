@@ -110,6 +110,18 @@ bool Server::_handleClient(int fd) {
 	}
 }
 
+bool Server::_handleClientEvents(int fd, short revents) {
+	bool shouldRemove = false;
+
+	if (revents & POLLIN)
+		shouldRemove = _handleClient(fd);
+	if (!shouldRemove && (revents & (POLLERR | POLLHUP | POLLNVAL))) {
+		_removeClient(fd);
+		shouldRemove = true;
+	}
+	return shouldRemove;
+}
+
 bool Server::_processBuffer(int fd) {
 	size_t pos;
 
@@ -139,17 +151,17 @@ void Server::_loopServer() {
 			throw std::runtime_error("poll() failed!");
 		}
 		for(size_t i = 0; i < _fds.size(); i++){
-			if (_fds[i].revents & POLLIN) { // if there is data to read in that fd
-				if (i == 0){
+			if (i == 0) {
+				if (_fds[i].revents & POLLIN)
 					_acceptNewClient();
-				}
-				else {
-					if (_handleClient(_fds[i].fd)){
-						close(_fds[i].fd);
-						_fds.erase(_fds.begin() + i);
-						i--;
-					}
-				}
+				continue;
+			}
+			int clientFd = _fds[i].fd;
+			short revents = _fds[i].revents;
+			if (_handleClientEvents(clientFd, revents)) {
+				close(clientFd);
+				_fds.erase(_fds.begin() + i);
+				i--;
 			}
 		}
 	}

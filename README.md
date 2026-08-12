@@ -85,7 +85,7 @@ src/
 - Client multiplexing using `poll`.
 - Per-client buffer for commands ending in `\r\n`.
 - Shutdown through `SIGINT`.
-- C++98 compilation with `-Wall -Wextra -Werror`.
+- Makefile configured with `-std=c++98 -Wall -Wextra -Werror`.
 
 ### Client
 
@@ -114,7 +114,7 @@ src/
 
 Not all of this state is connected to complete commands yet.
 
-## Commands Already Started
+## Command Status
 
 ### PASS
 
@@ -168,28 +168,28 @@ Partially implemented.
 - Allows joining existing channels.
 - Supports comma-separated channel lists.
 - Supports password/key when creating a channel.
+- Makes the first member of a new channel an operator.
 - Sends `JOIN`, `353`, and `366` replies.
 
-Placeholders:
+Known limitations:
 
-- Automatically make the first client in a channel an operator.
-- Send the complete member list in `353`.
-- Send correct IRC errors for full channels, invite-only channels, and wrong keys.
+- Join failures for a full, invite-only, or keyed channel currently return no IRC error reply.
 - Avoid inconsistent states when a client is already in the channel.
+- Review empty-key and malformed channel-list parsing.
 
 ### PRIVMSG
 
 Partially implemented.
 
-- Sends a direct message to a nickname.
+- Sends direct messages to a connected nickname.
+- Supports trailing messages after `:`.
+- Supports `PRIVMSG #channel :message` and broadcasts it to other channel members.
+- Rejects an empty recipient, empty message, unknown channel, and sends to channels the client has not joined.
 
-Placeholders:
+Known limitations:
 
-- Support the full message after `:`.
-- Support `PRIVMSG #channel :message`.
-- Broadcast to channel members.
-- Do not send the message back to the sender for channel messages.
-- Send correct errors: no recipient, no text, no such nick, no such channel, client not in channel.
+- An unknown nickname does not yet return the correct IRC error or stop delivery cleanly.
+- Multiple comma-separated recipients are not supported.
 
 ### KICK
 
@@ -198,12 +198,12 @@ Partially implemented.
 - Looks up the channel.
 - Looks up the target user.
 - Checks whether the sender is in the channel and is an operator.
+- Broadcasts the `KICK` command to channel members.
 - Removes the member from the channel.
 
-Placeholders:
+Known limitations:
 
-- Fix the IRC `KICK` broadcast/reply format.
-- Fix the loop that sends the message to channel members.
+- Standard trailing kick reasons are parsed incorrectly.
 - Review permission rules for kicking operators.
 - Send correct errors: no such channel, sender not in channel, target not in channel, missing privileges.
 
@@ -213,14 +213,14 @@ Partially implemented.
 
 - Looks up the channel.
 - Looks up the target user.
-- Adds the user to the invited list.
+- Adds the user to the invited list when the channel is invite-only or keyed.
 
-Placeholders:
+Known limitations:
 
-- Fix `isInvited` verification.
 - Validate whether the sender must be an operator.
 - Validate whether the invited user is already in the channel.
 - Send IRC invite replies to the sender and invited user.
+- Allow invitations to ordinary channels.
 - Send correct errors.
 
 ### HELP
@@ -230,11 +230,11 @@ Project helper command.
 - Shows a small manual connection sequence.
 - This is not part of the mandatory subject commands, but it can help with manual testing.
 
-## Mandatory Commands Still To Address
+## Mandatory Operator Commands
 
 ### TOPIC
 
-Mandatory subject placeholder.
+Implemented with current limitations.
 
 Should support:
 
@@ -243,16 +243,18 @@ TOPIC #channel
 TOPIC #channel :new topic
 ```
 
-Expected behavior:
+Current behavior:
 
 - View the current topic.
 - Change the topic.
 - Respect mode `+t`, where only operators can change the topic.
 - Send correct numeric replies for an existing topic or no topic.
 
+Limitation: `TOPIC #channel :` is treated as a topic query instead of clearing the topic.
+
 ### MODE
 
-Mandatory subject placeholder.
+Implemented for one mode change per command.
 
 The subject requires channel modes:
 
@@ -264,7 +266,7 @@ o - give/remove operator privileges
 l - user limit
 ```
 
-Expected examples:
+Supported examples:
 
 ```text
 MODE #channel +i
@@ -278,13 +280,20 @@ MODE #channel +l 10
 MODE #channel -l
 ```
 
-## Features Still To Do To Match The Subject
+Known limitations:
 
-- Implement `TOPIC`.
-- Implement `MODE` with `i`, `t`, `k`, `o`, `l`.
-- Ensure the first client in a channel becomes an operator.
-- Improve `PRIVMSG` for channels and messages using `:`.
-- Fix `KICK` and `INVITE` formatting and IRC errors.
+- Combined mode strings such as `MODE #channel +it` are validated but do not apply their changes.
+- `MODE #channel` does not return the current channel modes.
+- Some mode-specific IRC error cases still need review.
+
+## Remaining Work To Match The Subject
+
+- Fix C++98 compatibility in the polling loop.
+- Complete JOIN error handling and safe parsing.
+- Correct direct-message errors and delivery to unknown nicknames.
+- Complete `KICK` and `INVITE` parsing, permissions, notifications, and IRC errors.
+- Support combined MODE strings and mode queries.
+- Allow clearing a topic with an empty trailing parameter.
 - Implement complete cleanup when a client disconnects:
   - remove from all channels
   - remove from operators
@@ -294,7 +303,6 @@ MODE #channel -l
 - Add basic `PING/PONG` support for compatibility with real clients.
 - Reply with `421 ERR_UNKNOWNCOMMAND` for unknown commands.
 - Improve general IRC command parsing.
-- Ensure all messages end with `\r\n`.
 - Handle partial `send` or send errors.
 - Ignore `SIGPIPE` to avoid crashes when a client closes the connection.
 - Review all numeric errors so they are closer to the RFC/subject.

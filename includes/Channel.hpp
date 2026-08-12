@@ -66,6 +66,8 @@ class Channel
 		void	removeMember(int fd);
 		void	addOperator(int fd);
 		void	removeOperator(int fd);
+		void	removeInvite(int fd);
+		void	removeClient(int fd);
 		void	invite(int fd);
 		
 };
