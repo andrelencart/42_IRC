@@ -110,12 +110,15 @@ bool Server::buildChan(std::map<std::string, std::string>::const_iterator channe
 		return true;
 	}
 	if(it->second.isFull()){
+		_sendMsg(fd, ERR_CHANNELISFULL(it->first));
 		return false;
 	}
 	if(it->second.isInviteOnly() && !it->second.isInvited(fd)){
+		_sendMsg(fd, ERR_INVITEONLYCHAN(it->first));
 		return false;
 	}
 	if(it->second.hasPass() && it->second.getPass() != channels->second){
+		_sendMsg(fd, ERR_BADCHANNELKEY(it->first));
 		return false;
 	}
 	it->second.addMember(fd);
