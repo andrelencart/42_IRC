@@ -90,14 +90,17 @@ void Server::_acceptNewClient() {
 bool Server::_handleClient(int fd) {
 	char buffer[512];
 	std::memset(buffer, 0, sizeof(buffer));
-	int bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
+	ssize_t bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
 
 	if (bytes == 0) {
 		_removeClient(fd);
 		return true;
 	}
-	else if (bytes == -1){
-		std::cerr << "recv() error on fd " << fd << std::endl;
+	else if (bytes < 0){
+		if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+			return false;
+		std::cerr << "recv() error on fd " << fd << ": "
+			<< std::strerror(errno) << std::endl;
 		_removeClient(fd);
 		return true;
 	}
