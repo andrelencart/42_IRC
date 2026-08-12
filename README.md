@@ -84,8 +84,12 @@ src/
 
 - IPv4 TCP socket using `socket`, `bind`, `listen`, and `accept`.
 - Non-blocking sockets using `fcntl`.
-- Client multiplexing using `poll`.
-- Per-client buffer for commands ending in `\r\n`.
+- Client read, write, hangup, and socket-error handling through `poll`.
+- Per-client read buffer for commands ending in `\r\n`.
+- Per-client write buffer with `POLLOUT` polling and partial-send handling.
+- Temporary `recv`/`send` errors keep the client connected for a later poll cycle.
+- `SIGPIPE` is ignored so a closed client cannot terminate the server during `send`.
+- Disconnect cleanup removes member, operator, and invitation state, deletes empty channels, and notifies remaining members.
 - Shutdown through `SIGINT`.
 - Makefile configured with `-std=c++98 -Wall -Wextra -Werror`.
 
@@ -99,7 +103,8 @@ src/
 - password state
 - authentication state
 - read buffer
-- write buffer, prepared but not heavily used yet
+- write buffer for queued outgoing messages
+- close-after-write state for replies that must be delivered before disconnecting
 
 ### Channels
 
@@ -123,13 +128,13 @@ Not all of this state is connected to complete commands yet.
 Implemented for the subject registration requirements.
 
 - Validates the received password.
-- Removes the client if the password is empty or wrong.
+- Disconnects the client after delivering the error reply if the password is empty or wrong.
 - Rejects repeated `PASS` after the password has already been accepted.
 
 Current behavior:
 
-- `PASS` with no parameter sends `461` and disconnects the client.
-- `PASS` with a wrong password sends `464` and disconnects the client.
+- `PASS` with no parameter queues `461` and disconnects after the reply is sent.
+- `PASS` with a wrong password queues `464` and disconnects after the reply is sent.
 - `PASS` with the correct password marks the client password state as accepted.
 - `PASS` after a successful password sends `462` and keeps the client connected.
 
@@ -172,10 +177,11 @@ Partially implemented.
 - Supports password/key when creating a channel.
 - Makes the first member of a new channel an operator.
 - Sends `JOIN`, `353`, and `366` replies.
+- Sends `471`, `473`, or `475` when a channel is full, invite-only, or has the wrong key.
+- Consumes a stored invitation after a successful join.
 
 Known limitations:
 
-- Join failures for a full, invite-only, or keyed channel currently return no IRC error reply.
 - Avoid inconsistent states when a client is already in the channel.
 - Review empty-key and malformed channel-list parsing.
 
@@ -201,7 +207,7 @@ Partially implemented.
 - Looks up the target user.
 - Checks whether the sender is in the channel and is an operator.
 - Broadcasts the `KICK` command to channel members.
-- Removes the member from the channel.
+- Removes the target from member, operator, and invitation state.
 
 Known limitations:
 
@@ -296,17 +302,9 @@ Known limitations:
 - Complete `KICK` and `INVITE` parsing, permissions, notifications, and IRC errors.
 - Support combined MODE strings and mode queries.
 - Allow clearing a topic with an empty trailing parameter.
-- Implement complete cleanup when a client disconnects:
-  - remove from all channels
-  - remove from operators
-  - remove from invited users
-  - delete empty channels
-  - notify remaining members
 - Add basic `PING/PONG` support for compatibility with real clients.
 - Reply with `421 ERR_UNKNOWNCOMMAND` for unknown commands.
 - Improve general IRC command parsing.
-- Handle partial `send` or send errors.
-- Ignore `SIGPIPE` to avoid crashes when a client closes the connection.
 - Review all numeric errors so they are closer to the RFC/subject.
 
 ## Suggested Manual Tests
