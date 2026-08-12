@@ -460,7 +460,7 @@ bool Server::_processCommand(int fd, std::string line) {
 	if (!_checkPasswordRegistration(fd, command))
 		return true;
 	if (!_dispatchRegistrationCommand(fd, command, param, line))
-		return false;
+		return true;
 	_tryAuthenticateClient(fd);
 	if (_clients[fd].getAuth() == true)
 		_dispatchCommand(fd, command, line);

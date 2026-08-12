@@ -81,7 +81,7 @@ std::string Server::_buildNamesList(const Channel &channel)
 
 	for (std::set<int>::const_iterator it = members.begin(); it != members.end(); it++)
 	{
-		if (it != members.begin())
+		if (it != members.begin() && _clients[*it].getNickname() != "")
 			ss << " ";
 		if (channel.isOperator(*it))
 			ss << "@";
