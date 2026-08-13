@@ -1,5 +1,4 @@
 #include "../../includes/Server.hpp"
-
 bool Server::_parseCommand(const std::string &line, Command &command) const {
 	std::string::size_type pos = 0;
 	std::string::size_type start;
@@ -92,20 +91,27 @@ std::map<std::string, std::string> Server::_buildChannelMap(std::string channel,
 }
 
 bool Server::_parseChannel(std::map<std::string, std::string>::const_iterator it, int fd){
-	if (it->first.empty() || (it->first[0] != '&' && it->first[0] != '#'))
+	const std::string &name = it->first;
+
+	if (name.empty() || (name[0] != '&' && name[0] != '#'))
 	{
-		_sendMsg(fd, ERR_BADCHANMASK("JOIN"));
+		_sendMsg(fd, ERR_BADCHANMASK(name));
 		return false;
 	}
-	if (it->first.find(7) != std::string::npos)
+	if (name.size() > 200)
 	{
-		_sendMsg(fd, ERR_BADCHANMASK("JOIN"));
+		_sendMsg(fd, ERR_BADCHANMASK(name));
 		return false;
 	}
-	if (it->first.size() > 200)
+	for (std::string::size_type i = 0; i < name.size(); i++)
 	{
-		_sendMsg(fd, ERR_BADCHANMASK("JOIN"));
-		return false;
+		unsigned char character = static_cast<unsigned char>(name[i]);
+
+		if (name[i] == ',' || name[i] == ' ' || std::iscntrl(character))
+		{
+			_sendMsg(fd, ERR_BADCHANMASK(name));
+			return false;
+		}
 	}
 	return true;
 }
@@ -126,25 +132,41 @@ std::string Server::_buildNamesList(const Channel &channel)
 	return ss.str();
 }
 
+void Server::_sendJoinReplies(int fd, Channel &channel)
+{
+	std::stringstream reply;
+
+	if (!channel.getTopic().empty())
+		_sendMsg(fd, RPL_TOPIC(_clients[fd].getNickname(), channel.getName(), channel.getTopic()));
+	reply << ":" << _serverName
+		<< " 353 " << _clients[fd].getNickname()
+		<< " = " << channel.getName()
+		<< " :" << _buildNamesList(channel)
+		<< "\r\n";
+	_sendMsg(fd, reply.str());
+	reply.str("");
+	reply.clear();
+	reply << ":" << _serverName
+		<< " 366 " << _clients[fd].getNickname()
+		<< " " << channel.getName()
+		<< " :End of /NAMES list.\r\n";
+	_sendMsg(fd, reply.str());
+}
+
 bool Server::buildChan(std::map<std::string, std::string>::const_iterator channels, int fd){
 	std::map<std::string, Channel>::iterator it = _channels.find(channels->first);
-	std::stringstream ss;
 	if(it == _channels.end()){
 		Channel newChan(channels->first);
-		if(channels->second != "")
-			newChan.setPass(channels->second);
 		newChan.addMember(fd);
 		newChan.addOperator(fd);
 		_channels.insert(std::pair<std::string, Channel>(channels->first, newChan));
-		_broadcastChannelCommand(fd, _channels.find(channels->first)->second, "JOIN", "", "");
-		ss << ":" << _serverName << " 353 " << _clients[fd].getNickname()  << " = " << channels->first << " :" << _buildNamesList(_channels.find(channels->first)->second) << "\r\n";
-		_sendMsg(fd, ss.str());
-		ss.str("");
-		ss.clear();
-		ss << ":" << _serverName << " 366 " << _clients[fd].getNickname() << " " << channels->first << " :End of /NAMES list." <<"\r\n";
-		_sendMsg(fd, ss.str());
+		it = _channels.find(channels->first);
+		_broadcastChannelCommand(fd, it->second, "JOIN", "", "");
+		_sendJoinReplies(fd, it->second);
 		return true;
 	}
+	if(it->second.isMember(fd))
+		return true;
 	if(it->second.isFull()){
 		_sendMsg(fd, ERR_CHANNELISFULL(it->first));
 		return false;
@@ -160,17 +182,9 @@ bool Server::buildChan(std::map<std::string, std::string>::const_iterator channe
 	it->second.addMember(fd);
 	it->second.removeInvite(fd);
 	_broadcastChannelCommand(fd, it->second, "JOIN", "", "");
-	ss << ":" << _serverName << " 353 " << _clients[fd].getNickname()  << " = " << channels->first << " :" << _buildNamesList(it->second) << "\r\n";
-	_sendMsg(fd, ss.str());
-	ss.str("");
-	ss.clear();
-	ss << ":" << _serverName << " 366 " << _clients[fd].getNickname() << " " << channels->first << " :End of /NAMES list." <<"\r\n";
-	_sendMsg(fd, ss.str());
+	_sendJoinReplies(fd, it->second);
 	return true;
 }
-
-//"353 " + sender + " = " + channel + " :" + users
-//"366 " + sender + " " + channel + " :End of /NAMES list."
 
 bool Server::_handleJoin(int fd, const Command &command)
 {
