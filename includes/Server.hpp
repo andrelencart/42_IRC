@@ -14,14 +14,22 @@
 #include <poll.h>
 #include <csignal>
 #include <cerrno>
+#include <cctype>
 #include "Client.hpp"
 #include "Channel.hpp"
 
 class Channel;
 
+struct Command {
+	std::string name;
+	std::vector<std::string> params;
+	bool hasTrailing;
+	std::string trailing;
+};
+
 class Server {
 	private:
-		typedef bool (Server::*CommandHandler)(int, std::string);
+		typedef bool (Server::*CommandHandler)(int, const Command &);
 
 		int _port;
 		std::string _password;
@@ -45,20 +53,21 @@ class Server {
 		void _setWritePolling(int fd, bool enabled);
 		void _sendMsg(int fd, const std::string &message);
 		bool _processBuffer(int fd);
-		bool _processCommand(int fd, std::string line);
+		bool _processCommand(int fd, const std::string &line);
+		bool _parseCommand(const std::string &line, Command &command) const;
 		void _initCommandHandlers();
-		bool _dispatchCommand(int fd, std::string command, std::string line);
-		bool _checkPasswordRegistration(int fd, std::string command);
-		bool _dispatchRegistrationCommand(int fd, std::string command, std::string param, std::string line);
+		bool _dispatchCommand(int fd, const Command &command);
+		bool _checkRegistration(int fd, const Command &command);
+		bool _dispatchRegistrationCommand(int fd, const Command &command);
 		void _tryAuthenticateClient(int fd);
-		bool _handlePass(int fd, std::string password);
-		bool _handleNick(int fd, std::string nick);
-		bool _handleUser(int fd, std::string line);
+		bool _handlePass(int fd, const Command &command);
+		bool _handleNick(int fd, const Command &command);
+		bool _handleUser(int fd, const Command &command);
 		void _handleHelp(int fd);
-		bool _handleJoin(int fd, std::string line);
-		bool _handleKick(int fd, std::string line);
-		bool _handleTopic(int fd, std::string line);
-		bool _handleMode(int fd, std::string line);
+		bool _handleJoin(int fd, const Command &command);
+		bool _handleKick(int fd, const Command &command);
+		bool _handleTopic(int fd, const Command &command);
+		bool _handleMode(int fd, const Command &command);
 		bool _validateModeRequest(int fd, std::string channelName, std::string modeString, Channel **channel);
 		bool _isValidChannelMode(char mode) const;
 		bool _applyMode(int fd, Channel *channel, std::string channelName, std::string &modeString, std::string modeParam);
@@ -66,8 +75,8 @@ class Server {
 		bool _applyOperatorMode(int fd, Channel *channel, std::string channelName, std::string &modeString, std::string modeParam);
 		bool _applyLimitMode(int fd, Channel *channel, std::string &modeString, std::string modeParam);
 		int _findClientFdByNick(std::string nick) const;
-		bool _handleInvite(int fd, std::string line);
-		void _handleMsg(int fd, std::string line);
+		bool _handleInvite(int fd, const Command &command);
+		bool _handleMsg(int fd, const Command &command);
 		std::map<std::string, std::string> _buildChannelMap(std::string channel, std::string pass, int fd, int *check);
 		bool _parseChannel(std::map<std::string, std::string>::const_iterator channel, int fd);
 		bool buildChan(std::map<std::string, std::string>::const_iterator channel, int fd);

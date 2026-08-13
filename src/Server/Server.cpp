@@ -188,9 +188,18 @@ bool Server::_flushClientOutput(int fd) {
 
 bool Server::_processBuffer(int fd) {
 	size_t pos;
+	std::string buffer;
 
-	while ((pos = _clients[fd].getReadBuffer().find("\r\n")) != std::string::npos) {
-		std::string line = _clients[fd].getReadBuffer().substr(0, pos);
+	while (true) {
+		buffer = _clients[fd].getReadBuffer();
+		pos = buffer.find("\r\n");
+		if (pos == std::string::npos)
+			break;
+		if (pos > 510) {
+			_removeClient(fd);
+			return false;
+		}
+		std::string line = buffer.substr(0, pos);
 		if (_clients[fd].getAuth())
 			std::cout << _clients[fd].getNickname() << ": " << line << std::endl;
 		_clients[fd].eraseBuffer(pos);
@@ -198,6 +207,12 @@ bool Server::_processBuffer(int fd) {
 			return false;
 		if (_clients[fd].getCloseAfterWrite())
 			return true;
+	}
+	buffer = _clients[fd].getReadBuffer();
+	if (buffer.size() > 511
+		|| (buffer.size() == 511 && buffer[buffer.size() - 1] != '\r')) {
+		_removeClient(fd);
+		return false;
 	}
 	return true;
 }

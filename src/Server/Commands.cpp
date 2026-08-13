@@ -10,7 +10,13 @@ void Server::_handleHelp(int fd)
 	_sendMsg(fd,"4. JOIN #<channel name> (optional)<password>\r\n");
 };
 
-bool Server::_handlePass(int fd, std::string password){
+bool Server::_handlePass(int fd, const Command &command){
+	std::string password;
+
+	if (!command.params.empty())
+		password = command.params[0];
+	else if (command.hasTrailing)
+		password = command.trailing;
 	if ( _clients[fd].getPassword() == true){
 		_sendMsg(fd, ERR_ALREADYREGISTED());
 		return true;
@@ -31,8 +37,14 @@ bool Server::_handlePass(int fd, std::string password){
 	return true;
 }
 
-bool Server::_handleNick(int fd, std::string nick)
+bool Server::_handleNick(int fd, const Command &command)
 {
+	std::string nick;
+
+	if (!command.params.empty())
+		nick = command.params[0];
+	else if (command.hasTrailing)
+		nick = command.trailing;
 	if (nick.empty()){
 		_sendMsg(fd, ERR_NONICKNAMEGIVEN());
 		return (false);
@@ -59,20 +71,14 @@ bool Server::_handleNick(int fd, std::string nick)
 	return (true);
 }
 
-bool Server::_handleUser(int fd, std::string line)
+bool Server::_handleUser(int fd, const Command &command)
 {
-	std::istringstream iss(line);
-	std::vector<std::string> params;
-	std::string token;
-
-	while (iss >> token)
-		params.push_back(token);
-
-	if (params.size() < 5){
+	if (command.params.size() < 3
+		|| (command.params.size() < 4 && !command.hasTrailing)){
 		_sendMsg(fd, ERR_NEEDMOREPARAMS("USER"));
 		return false;
 	}
-	if (params[2] != "0" || params[3] != "*"){
+	if (command.params[1] != "0" || command.params[2] != "*"){
 		_sendMsg(fd, ERR_NEEDMOREPARAMS("USER"));
 		return false;
 	}
@@ -80,7 +86,7 @@ bool Server::_handleUser(int fd, std::string line)
 		_sendMsg(fd, ERR_ALREADYREGISTED() );
 		return false;
 	}
-	_clients[fd].setUsername(params[1]);
+	_clients[fd].setUsername(command.params[0]);
 	return true;
 }
 
@@ -122,29 +128,28 @@ int Server::_userToFd(std::string username, int fd, std::string cmdErr){
 	return uname->second.getClientFD();
 }
 
-bool Server::_handleKick(int fd, std::string line)
+bool Server::_handleKick(int fd, const Command &command)
 {
-	std::istringstream iss(line);
-	std::string check_no;
 	std::string channel;
 	std::string username;
 	std::string comment;
 	int user;
 
-	iss >> check_no;
-	iss >> channel;
-	iss >> username;
-	iss >> comment;
-	iss >> check_no;
-	if (check_no != "KICK")
+	if (command.params.size() > 3)
 	{
 		_sendMsg(fd, ERR_TOOMANYTARGETS("KICK"));
 		return false;
 	}
-	if(channel == "" || username == ""){
+	if (command.params.size() < 2){
 		_sendMsg(fd, ERR_NEEDMOREPARAMS("KICK"));
 		return false;
 	}
+	channel = command.params[0];
+	username = command.params[1];
+	if (command.hasTrailing)
+		comment = command.trailing;
+	else if (command.params.size() > 2)
+		comment = command.params[2];
 	std::map<std::string, Channel>::iterator it;
 	it = _channels.find(channel);
 	if(it == _channels.end()){
@@ -157,34 +162,28 @@ bool Server::_handleKick(int fd, std::string line)
 		_sendMsg(fd, ERR_NOSUCHNICK("KICK"));
 		return false;
 	}
-	if (comment.size() > 0 && comment[0] == ':')
-		comment = comment.substr(1);
 	_broadcastChannelCommand(fd, it->second, "KICK", username, comment);
 	it->second.removeClient(user);
 	return true;
 }
 
-bool Server::_handleInvite(int fd, std::string line)
+bool Server::_handleInvite(int fd, const Command &command)
 {
-	std::istringstream iss(line);
-	std::string check_no;
 	std::string username;
 	std::string channel;
 	int user;
 
-	iss >> check_no;
-	iss >> username;
-	iss >> channel;
-	iss >> check_no;
-	if (check_no != "INVITE")
+	if (command.params.size() > 2)
 	{
 		_sendMsg(fd, ERR_TOOMANYTARGETS("INVITE"));
 		return false;
 	}
-	if(channel == "" || username == ""){
+	if (command.params.size() < 2){
 		_sendMsg(fd, ERR_NEEDMOREPARAMS("INVITE"));
 		return false;
 	}
+	username = command.params[0];
+	channel = command.params[1];
 	std::map<std::string, Channel>::iterator it;
 	it = _channels.find(channel);
 	if(it == _channels.end()){
@@ -199,33 +198,22 @@ bool Server::_handleInvite(int fd, std::string line)
 	return true;
 }
 
-bool Server::_handleTopic(int fd, std::string line) {
-	std::istringstream iss(line);
-	std::vector<std::string>params;
-	std::string token;
-	std::string topic;
-	
-	while (iss >> token)
-		params.push_back(token);
-	size_t pos = line.find(':');
-	if (pos != std::string::npos)
-		topic = line.substr(pos + 1);
-
-	if (params.size() < 2){
+bool Server::_handleTopic(int fd, const Command &command) {
+	if (command.params.empty()){
 		_sendMsg(fd, ERR_NEEDMOREPARAMS("TOPIC"));
 		return false;
 	}
 
-	Channel *channel = _getChannel(params[1]);
+	Channel *channel = _getChannel(command.params[0]);
 	if (channel == NULL){
-		_sendMsg(fd, ERR_NOSUCHCHANNEL(params[1]));
+		_sendMsg(fd, ERR_NOSUCHCHANNEL(command.params[0]));
 		return false;
 	}
 	if (!channel->isMember(fd)){
-		_sendMsg(fd, ERR_NOTONCHANNEL(params[1]));
+		_sendMsg(fd, ERR_NOTONCHANNEL(command.params[0]));
 		return false;
 	}
-	if (topic.empty()){
+	if (!command.hasTrailing){
 		if (channel->getTopic().empty())
 			_sendMsg(fd, RPL_NOTOPIC(_clients[fd].getNickname(), channel->getName()));
 		else
@@ -236,8 +224,8 @@ bool Server::_handleTopic(int fd, std::string line) {
 		_sendMsg(fd, ERR_CHANOPRIVSNEEDED(channel->getName()));
 		return false;
 	}
-	channel->setTopic(topic);
-	_broadcastChannelCommand(fd, *channel, "TOPIC", "", topic);
+	channel->setTopic(command.trailing);
+	_broadcastChannelCommand(fd, *channel, "TOPIC", "", command.trailing);
 	return true;
 }
 
@@ -370,18 +358,18 @@ bool Server::_applyMode(int fd, Channel *channel, std::string channelName, std::
 	return true;
 }
 
-bool Server::_handleMode(int fd, std::string line) {
-	std::istringstream iss(line);
-	std::string command;
+bool Server::_handleMode(int fd, const Command &command) {
 	std::string channelName;
 	std::string modeString;
 	std::string modeParam;
 	Channel *channel;
 
-	iss >> command;
-	iss >> channelName;
-	iss >> modeString;
-	iss >> modeParam;
+	if (!command.params.empty())
+		channelName = command.params[0];
+	if (command.params.size() > 1)
+		modeString = command.params[1];
+	if (command.params.size() > 2)
+		modeParam = command.params[2];
 
 	if (!_validateModeRequest(fd, channelName, modeString, &channel))
 		return false;
@@ -397,44 +385,49 @@ void Server::_initCommandHandlers() {
 	_commandHandlers["INVITE"] = &Server::_handleInvite;
 	_commandHandlers["TOPIC"] = &Server::_handleTopic;
 	_commandHandlers["MODE"] = &Server::_handleMode;
+	_commandHandlers["PRIVMSG"] = &Server::_handleMsg;
 }
 
-bool Server::_dispatchCommand(int fd, std::string command, std::string line) {
-	std::map<std::string, CommandHandler>::iterator it = _commandHandlers.find(command);
+bool Server::_dispatchCommand(int fd, const Command &command) {
+	std::map<std::string, CommandHandler>::iterator it = _commandHandlers.find(command.name);
 
 	if (it != _commandHandlers.end())
-		return (this->*(it->second))(fd, line);
-	if (command == "PRIVMSG")
-	{
-		_handleMsg(fd, line);
-		return true;
-	}
+		return (this->*(it->second))(fd, command);
+	_sendMsg(fd, ERR_UNKNOWNCOMMAND(command.name));
 	return false;
 }
 
-bool Server::_checkPasswordRegistration(int fd, std::string command) {
-	if (command != "PASS" && !_clients[fd].getPassword()){
+bool Server::_checkRegistration(int fd, const Command &command) {
+	if (command.name == "PASS")
+		return true;
+	if (!_clients[fd].getPassword()){
+		_sendMsg(fd, ":server 451 * :You have not registered\r\n");
+		return false;
+	}
+	if (command.name != "NICK" && command.name != "USER"
+		&& command.name != "HELP" && !_clients[fd].getAuth()){
 		_sendMsg(fd, ":server 451 * :You have not registered\r\n");
 		return false;
 	}
 	return true;
 }
 
-bool Server::_dispatchRegistrationCommand(int fd, std::string command, std::string param, std::string line) {
-	if (command == "PASS"){
-		if (!_handlePass(fd, param))
-			return false;
+bool Server::_dispatchRegistrationCommand(int fd, const Command &command) {
+	if (command.name == "PASS"){
+		_handlePass(fd, command);
 	}
-	else if (command == "NICK"){
-		_handleNick(fd, param);
+	else if (command.name == "NICK"){
+		_handleNick(fd, command);
 	}
-	else if (command == "USER"){
-		_handleUser(fd, line);
+	else if (command.name == "USER"){
+		_handleUser(fd, command);
 	}
-	else if (command == "HELP")
+	else if (command.name == "HELP")
 	{
 		_handleHelp(fd);
 	}
+	else
+		return false;
 	return true;
 }
 
@@ -449,64 +442,57 @@ void Server::_tryAuthenticateClient(int fd) {
 	}
 }
 
-bool Server::_processCommand(int fd, std::string line) {
-	std::istringstream iss(line);
-	std::string command;
-	std::string param;
+bool Server::_processCommand(int fd, const std::string &line) {
+	Command command;
 
-	// Handle functions recebiam o "iss" e eu mudei para "param" para receber o valor diretamente
-	iss >> command;
-	iss >> param;
-	if (!_checkPasswordRegistration(fd, command))
+	if (!_parseCommand(line, command))
 		return true;
-	if (!_dispatchRegistrationCommand(fd, command, param, line))
+	if (!_checkRegistration(fd, command))
 		return true;
-	_tryAuthenticateClient(fd);
-	if (_clients[fd].getAuth() == true)
-		_dispatchCommand(fd, command, line);
-	if(command[0] == '#')
-		broadcastToChannel(command, param, fd); //temporary for testing broadcast to channel function; usage: 'channel' 'msg'.
+	if (_dispatchRegistrationCommand(fd, command)) {
+		_tryAuthenticateClient(fd);
+		return true;
+	}
+	_dispatchCommand(fd, command);
 	return true;
 }
 
-void	Server::_handleMsg(int fd, std::string line){
-	std::istringstream iss(line);
-	std::string check_no;
+bool	Server::_handleMsg(int fd, const Command &command){
 	std::string username;
 	std::string msg;
 	int user;
-	size_t pos;
 
-	iss >> check_no;
-	iss >> username;
-	pos = line.find(':');
-	if (pos != std::string::npos)
-		msg = line.substr(pos + 1);
-	else
-		iss >> msg;
-	if (username.empty()){
+	if (command.params.empty()){
 		_sendMsg(fd, ERR_NORECIPIENT("PRIVMSG"));
-		return ;
+		return false;
 	}
+	username = command.params[0];
+	if (command.hasTrailing)
+		msg = command.trailing;
+	else if (command.params.size() > 1)
+		msg = command.params[1];
 	if (msg.empty()){
 		_sendMsg(fd, ERR_NOTEXTTOSEND());
-		return ;
+		return false;
 	}
 	if (username[0] == '#' || username[0] == '&'){
 		Channel *channel = _getChannel(username);
 		if (channel == NULL){
 			_sendMsg(fd, ERR_NOSUCHCHANNEL(username));
-			return ;
+			return false;
 		}
 		if (!channel->isMember(fd)){
 			_sendMsg(fd, ERR_CANNOTSENDTOCHAN(username));
-			return ;
+			return false;
 		}
 		_broadcastChannelCommand(fd, *channel, "PRIVMSG", "", msg, fd);
-		return ;
+		return true;
 	}
 	user = _userToFd(username, fd, "PRIVMSG");
+	if (user <= 0)
+		return false;
 	std::stringstream ss;
 	ss << _clientPrefix(fd) << " PRIVMSG " << username << " :" << msg << "\r\n";
 	_sendMsg(user, ss.str());
+	return true;
 }
