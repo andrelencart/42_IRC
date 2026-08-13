@@ -81,6 +81,7 @@ class Server {
 		bool _parseChannel(std::map<std::string, std::string>::const_iterator channel, int fd);
 		bool buildChan(std::map<std::string, std::string>::const_iterator channel, int fd);
 		void broadcastToChannel(std::string chanName, std::string msg, int fd);
+		void _sendJoinReplies(int fd, Channel &channel);
 		std::string _buildNamesList(const Channel &channel);
 		std::string _clientPrefix(int fd);
 		void _broadcastToChannel(const Channel &channel, const std::string &msg, int exceptFd = -1);
