@@ -1,5 +1,41 @@
 #include "../../includes/Server.hpp"
 
+bool Server::_parseCommand(const std::string &line, Command &command) const {
+	std::string::size_type pos = 0;
+	std::string::size_type start;
+
+	command.name.clear();
+	command.params.clear();
+	command.hasTrailing = false;
+	command.trailing.clear();
+	while (pos < line.size() && line[pos] == ' ')
+		pos++;
+	if (pos == line.size())
+		return false;
+	start = pos;
+	while (pos < line.size() && line[pos] != ' ')
+		pos++;
+	command.name = line.substr(start, pos - start);
+	for (std::string::size_type i = 0; i < command.name.size(); i++)
+		command.name[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(command.name[i])));
+	while (pos < line.size()) {
+		while (pos < line.size() && line[pos] == ' ')
+			pos++;
+		if (pos == line.size())
+			break;
+		if (line[pos] == ':') {
+			command.hasTrailing = true;
+			command.trailing = line.substr(pos + 1);
+			break;
+		}
+		start = pos;
+		while (pos < line.size() && line[pos] != ' ')
+			pos++;
+		command.params.push_back(line.substr(start, pos - start));
+	}
+	return !command.name.empty();
+}
+
 std::map<std::string, std::string> Server::_buildChannelMap(std::string channel, std::string pass, int fd, int *check){
 	size_t pos = 0;
 	size_t pos2 = 0;
@@ -15,7 +51,7 @@ std::map<std::string, std::string> Server::_buildChannelMap(std::string channel,
 				temp = pass.substr(0, pos2);
 			pass = pass.substr(pos2 + 1, pass.size());
 		}
-		else if (pass[0]){
+		else if (!pass.empty()){
 			if(pos2 == std::string::npos)
 				temp = pass.substr(0, pass.size());
 			else
@@ -28,7 +64,7 @@ std::map<std::string, std::string> Server::_buildChannelMap(std::string channel,
 		std::cout << "channel    " << channel << std::endl;
 		channels.insert(std::pair<std::string, std::string>(channel.substr(0, pos), temp));
 		channel = channel.substr(pos + 1, channel.size());
-		if (channel[0] == ','){
+		if (!channel.empty() && channel[0] == ','){
 			_sendMsg(fd, ERR_BADCHANMASK("JOIN"));
 			*check = 1;
 		}
@@ -36,7 +72,7 @@ std::map<std::string, std::string> Server::_buildChannelMap(std::string channel,
 		pos2 = 0;
 		temp = "";
 	}
-	if (pass[0]){
+	if (!pass.empty()){
 		pos2 = pass.find(',');
 		if(pos2 == std::string::npos){
 			temp = pass.substr(0, pass.size());
@@ -48,7 +84,7 @@ std::map<std::string, std::string> Server::_buildChannelMap(std::string channel,
 		}	
 	}
 	channels.insert(std::pair<std::string, std::string>(channel.substr(0, pos), temp));
-	if (pass[0]){
+	if (!pass.empty()){
 		_sendMsg(fd, ERR_NEEDMOREPARAMS("JOIN"));
 		*check = 1;
 	}
@@ -56,7 +92,7 @@ std::map<std::string, std::string> Server::_buildChannelMap(std::string channel,
 }
 
 bool Server::_parseChannel(std::map<std::string, std::string>::const_iterator it, int fd){
-	if (it->first[0] != '&' && it->first[0] != '#')
+	if (it->first.empty() || (it->first[0] != '&' && it->first[0] != '#'))
 	{
 		_sendMsg(fd, ERR_BADCHANMASK("JOIN"));
 		return false;
@@ -136,29 +172,26 @@ bool Server::buildChan(std::map<std::string, std::string>::const_iterator channe
 //"353 " + sender + " = " + channel + " :" + users
 //"366 " + sender + " " + channel + " :End of /NAMES list."
 
-bool Server::_handleJoin(int fd, std::string line)
+bool Server::_handleJoin(int fd, const Command &command)
 {
-	std::istringstream iss(line);
 	std::string channel;
 	std::string pass;
-	std::string check_no;
 	std::map<std::string, std::string> channels;
 	int check = 0;
 
-	iss >> check_no;
-	iss >> channel;
-	iss >> pass;
-	iss >> check_no;
-	if (check_no != "JOIN")
+	if (command.params.size() > 2)
 	{
 		_sendMsg(fd, ERR_TOOMANYTARGETS("JOIN"));
 		return false;
 	}
-	if (channel.empty())
+	if (command.params.empty())
 	{
 		_sendMsg(fd, ERR_NEEDMOREPARAMS("JOIN"));
 		return false;
 	}
+	channel = command.params[0];
+	if (command.params.size() > 1)
+		pass = command.params[1];
 	channels = _buildChannelMap(channel, pass, fd, &check);
 	if(check)
 		return false;
