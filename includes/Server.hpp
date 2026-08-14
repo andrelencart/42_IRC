@@ -65,7 +65,10 @@ class Server {
 		bool _handleUser(int fd, const Command &command);
 		void _handleHelp(int fd);
 		bool _handleJoin(int fd, const Command &command);
+		bool _handlePart(int fd, const Command &command);
+		bool _partChannel(int fd, const std::string &channelName, const std::string &partMessage);
 		bool _handleKick(int fd, const Command &command);
+		bool _kickFromChannel(int fd, Channel &channel, const std::string &targetNickname, const std::string &comment);
 		bool _handleTopic(int fd, const Command &command);
 		bool _handleMode(int fd, const Command &command);
 		bool _validateModeRequest(int fd, std::string channelName, std::string modeString, Channel **channel);
