@@ -128,42 +128,113 @@ int Server::_userToFd(std::string username, int fd, std::string cmdErr){
 	return uname->second.getClientFD();
 }
 
-bool Server::_handleKick(int fd, const Command &command)
+bool Server::_kickFromChannel(int fd, Channel &channel, const std::string &targetNickname, const std::string &comment)
 {
-	std::string channel;
-	std::string username;
-	std::string comment;
-	int user;
+	int targetFd;
+	std::stringstream reply;
 
-	if (command.params.size() > 3)
-	{
-		_sendMsg(fd, ERR_TOOMANYTARGETS("KICK"));
+	if (!channel.isMember(fd)) {
+		_sendMsg(fd, ERR_NOTONCHANNEL(channel.getName()));
 		return false;
 	}
-	if (command.params.size() < 2){
+	if (!channel.isOperator(fd)) {
+		_sendMsg(fd, ERR_CHANOPRIVSNEEDED(channel.getName()));
+		return false;
+	}
+	targetFd = _findClientFdByNick(targetNickname);
+	if (targetFd == -1) {
+		_sendMsg(fd, ERR_NOSUCHNICK(targetNickname));
+		return false;
+	}
+	if (!channel.isMember(targetFd)) {
+		_sendMsg(fd, ERR_USERNOTINCHANNEL(targetNickname, channel.getName()));
+		return false;
+	}
+	reply << _clientPrefix(fd) << " KICK " << channel.getName()
+		<< " " << targetNickname << " :" << comment << "\r\n";
+	_broadcastToChannel(channel, reply.str());
+	channel.removeClient(targetFd);
+	return true;
+}
+
+bool Server::_handleKick(int fd, const Command &command)
+{
+	std::string channelName;
+	std::string targetNickname;
+	std::string comment;
+	std::map<std::string, Channel>::iterator channel;
+
+	if (command.params.size() < 2) {
 		_sendMsg(fd, ERR_NEEDMOREPARAMS("KICK"));
 		return false;
 	}
-	channel = command.params[0];
-	username = command.params[1];
+	channelName = command.params[0];
+	targetNickname = command.params[1];
+	comment = _clients[fd].getNickname();
 	if (command.hasTrailing)
 		comment = command.trailing;
 	else if (command.params.size() > 2)
 		comment = command.params[2];
-	std::map<std::string, Channel>::iterator it;
-	it = _channels.find(channel);
-	if(it == _channels.end()){
-		_sendMsg(fd, ERR_BADCHANMASK("KICK"));
+	channel = _channels.find(channelName);
+	if (channel == _channels.end()) {
+		_sendMsg(fd, ERR_NOSUCHCHANNEL(channelName));
 		return false;
 	}
-	user = _userToFd(username, fd, "KICK");
-	if(!it->second.isMember(fd) || !it->second.isOperator(fd) || !it->second.isMember(user) || it->second.isOperator(user))
-	{
-		_sendMsg(fd, ERR_NOSUCHNICK("KICK"));
+	if (!_kickFromChannel(fd, channel->second, targetNickname, comment))
+		return false;
+	if (channel->second.getMemberCount() == 0)
+		_channels.erase(channel);
+	return true;
+}
+
+bool Server::_partChannel(int fd, const std::string &channelName, const std::string &partMessage)
+{
+	std::map<std::string, Channel>::iterator channel;
+	std::stringstream reply;
+
+	channel = _channels.find(channelName);
+	if (channel == _channels.end()) {
+		_sendMsg(fd, ERR_NOSUCHCHANNEL(channelName));
 		return false;
 	}
-	_broadcastChannelCommand(fd, it->second, "KICK", username, comment);
-	it->second.removeClient(user);
+	if (!channel->second.isMember(fd)) {
+		_sendMsg(fd, ERR_NOTONCHANNEL(channelName));
+		return false;
+	}
+	reply << _clientPrefix(fd) << " PART " << channelName
+		<< " :" << partMessage << "\r\n";
+	_broadcastToChannel(channel->second, reply.str());
+	channel->second.removeClient(fd);
+	if (channel->second.getMemberCount() == 0)
+		_channels.erase(channel);
+	return true;
+}
+
+bool Server::_handlePart(int fd, const Command &command)
+{
+	std::string channelList;
+	std::string partMessage;
+	std::string::size_type start;
+	std::string::size_type end;
+
+	if (command.params.empty()) {
+		_sendMsg(fd, ERR_NEEDMOREPARAMS("PART"));
+		return false;
+	}
+	channelList = command.params[0];
+	partMessage = _clients[fd].getNickname();
+	if (command.hasTrailing)
+		partMessage = command.trailing;
+	else if (command.params.size() > 1)
+		partMessage = command.params[1];
+	start = 0;
+	while (start <= channelList.size()) {
+		end = channelList.find(',', start);
+		_partChannel(fd, channelList.substr(start, end - start), partMessage);
+		if (end == std::string::npos)
+			break;
+		start = end + 1;
+	}
 	return true;
 }
 
@@ -381,6 +452,7 @@ bool Server::_handleMode(int fd, const Command &command) {
 
 void Server::_initCommandHandlers() {
 	_commandHandlers["JOIN"] = &Server::_handleJoin;
+	_commandHandlers["PART"] = &Server::_handlePart;
 	_commandHandlers["KICK"] = &Server::_handleKick;
 	_commandHandlers["INVITE"] = &Server::_handleInvite;
 	_commandHandlers["TOPIC"] = &Server::_handleTopic;
@@ -488,9 +560,11 @@ bool	Server::_handleMsg(int fd, const Command &command){
 		_broadcastChannelCommand(fd, *channel, "PRIVMSG", "", msg, fd);
 		return true;
 	}
-	user = _userToFd(username, fd, "PRIVMSG");
-	if (user <= 0)
+	user = _findClientFdByNick(username);
+	if (user == -1){
+		_sendMsg(fd, ERR_NOSUCHNICK(username));
 		return false;
+	}
 	std::stringstream ss;
 	ss << _clientPrefix(fd) << " PRIVMSG " << username << " :" << msg << "\r\n";
 	_sendMsg(user, ss.str());
