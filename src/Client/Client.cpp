@@ -37,6 +37,75 @@ Client& Client::operator=(const Client &other)
 	return (*this);
 };
 
+// Getters
+
+std::string Client::getNickname() const
+{
+	return _nickname;
+}
+
+std::string Client::getUsername() const
+{
+	return _username;
+}
+
+bool Client::getPassword() const
+{
+	return _password;
+}
+
+bool Client::getAuth() const
+{
+	return _Auth;
+}
+
+int Client::getClientFD() const
+{
+	return _clientFD;
+}
+
+std::string Client::getReadBuffer() const
+{
+	return _readBuffer;
+}
+
+const std::string &Client::getWriteBuffer() const
+{
+	return _writeBuffer;
+}
+
+bool Client::getCloseAfterWrite() const
+{
+	return _closeAfterWrite;
+}
+
+// Setters
+
+void Client::setNickname(std::string nickname)
+{
+	_nickname = nickname;
+}
+
+void Client::setUsername(std::string username)
+{
+	_username = username;
+}
+
+void Client::setPassword(bool check)
+{
+	_password = check;
+}
+
+void Client::setAuth(bool Auth)
+{
+	_Auth = Auth;
+}
+
+void Client::setCloseAfterWrite(bool closeAfterWrite)
+{
+	_closeAfterWrite = closeAfterWrite;
+}
+
 void Client::appendReadBuffer(std::string toAppend)
 {
 	_readBuffer += toAppend;

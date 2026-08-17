@@ -35,21 +35,21 @@ class Client
 		Client& operator=(const Client &other);
 
 		// Getters
-		std::string	getNickname() const { return _nickname; };
-		std::string	getUsername() const { return _username; };
-		bool		getPassword() const { return _password; };
-		bool		getAuth() const { return _Auth; };
-		int			getClientFD() const { return _clientFD;  };
-		std::string getReadBuffer() const { return _readBuffer; };
-		const std::string &getWriteBuffer() const { return _writeBuffer; };
-		bool		getCloseAfterWrite() const { return _closeAfterWrite; };
+		std::string	getNickname() const;
+		std::string	getUsername() const;
+		bool		getPassword() const;
+		bool		getAuth() const;
+		int			getClientFD() const;
+		std::string getReadBuffer() const;
+		const std::string &getWriteBuffer() const;
+		bool		getCloseAfterWrite() const;
 
 		// Setters
-		void	setNickname(std::string nickname){_nickname = nickname;};
-		void	setUsername(std::string username){_username = username;};
-		void	setPassword(bool check){_password = check;};
-		void	setAuth(bool Auth){ _Auth = Auth; };
-		void	setCloseAfterWrite(bool closeAfterWrite){ _closeAfterWrite = closeAfterWrite; };
+		void	setNickname(std::string nickname);
+		void	setUsername(std::string username);
+		void	setPassword(bool check);
+		void	setAuth(bool Auth);
+		void	setCloseAfterWrite(bool closeAfterWrite);
 
 		//Others
 		void	appendReadBuffer(std::string toAppend);

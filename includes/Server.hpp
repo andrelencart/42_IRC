@@ -15,6 +15,7 @@
 #include <csignal>
 #include <cerrno>
 #include <cctype>
+#include <cstdlib>	
 #include "Client.hpp"
 #include "Channel.hpp"
 
