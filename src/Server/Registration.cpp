@@ -5,8 +5,21 @@ void Server::_handleHelp(int fd)
 	_sendMsg(fd,"IRC Connection Manual\r\n\n");
 	_sendMsg(fd,"1. PASS <server password>\r\n");
 	_sendMsg(fd,"2. NICK <user nickname>\r\n");
-	_sendMsg(fd,"3. USER <user username>\r\n");
-	_sendMsg(fd,"4. JOIN #<channel name> (optional)<password>\r\n");
+	_sendMsg(fd,"3. USER <username> 0 * <realname>\r\n");
+	_sendMsg(fd,"4. JOIN #<channel> (optional)<password>\r\n");
+	_sendMsg(fd,"5. TOPIC #<channel> :<topic>\r\n");
+	_sendMsg(fd,"6. INVITE #<channel> <nickname>\r\n");
+	_sendMsg(fd,"7. KICK #<channel> <nickname>\r\n");
+	_sendMsg(fd,"8. MODE #<channel> <rule>\r\n");
+	_sendMsg(fd,"\trule: +i invite-only\r\n");
+	_sendMsg(fd,"\trule: -i remove invite-only\r\n");
+	_sendMsg(fd,"\trule: +t topic\r\n");
+	_sendMsg(fd,"\trule: +k <password> add password\r\n");
+	_sendMsg(fd,"\trule: -k remove password\r\n");
+	_sendMsg(fd,"\trule: +o <nick> add operator previleges\r\n");
+	_sendMsg(fd,"\trule: -o <nick> remove operator previleges\r\n");
+	_sendMsg(fd,"\trule: +l add user limit\r\n");
+	_sendMsg(fd,"\trule: -l remove user limit\r\n");
 }
 
 bool Server::_handlePass(int fd, const Command &command) {
