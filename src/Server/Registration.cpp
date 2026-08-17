@@ -35,12 +35,10 @@ bool Server::_handlePass(int fd, const Command &command) {
 	}
 	if (password.empty()) {
 		_sendMsg(fd, ERR_NEEDMOREPARAMS("PASS"));
-		_clients[fd].setCloseAfterWrite(true);
 		return true;
 	}
 	if (password != _password) {
 		_sendMsg(fd, ERR_PASSWDMISMATCH());
-		_clients[fd].setCloseAfterWrite(true);
 		return true;
 	}
 	_clients[fd].setPassword(true);

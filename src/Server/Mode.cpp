@@ -1,5 +1,4 @@
 #include "../../includes/Server.hpp"
-#include <cstdlib>
 
 bool Server::_isValidChannelMode(char mode) const {
 	return (mode == 'i' || mode == 't' || mode == 'k'
