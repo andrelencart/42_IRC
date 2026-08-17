@@ -1,7 +1,6 @@
-# -->┊( NAMES )
+
 NAME	=	ircserv
 
-# -->┊( COMMANDS AND FLAGS )
 CXX		=	c++
 CXXFLAGS=	-std=c++98 -Wall -Wextra -Werror -g
 
@@ -11,11 +10,25 @@ INC_DIR	=	includes
 OBJ_DIR	=	objs
 
 # -->┊( SOURCES AND OBJS )
-SRCS	=	main.cpp \
-			Server/Server.cpp Server/Commands.cpp Server/Parsing.cpp Server/Replies.cpp Server/Cleanup.cpp\
-			Client/Client.cpp \
-			Channel/Channel.cpp \
+SERVER_SRCS	=	Server.cpp \
+				ClientIO.cpp \
+				CommandProcessor.cpp \
+				Registration.cpp \
+				Join.cpp \
+				ChannelCommands.cpp \
+				Mode.cpp \
+				Message.cpp \
+				Lookup.cpp \
+				Replies.cpp \
+				Cleanup.cpp
 
+CLIENT_SRCS	=	Client.cpp
+CHANNEL_SRCS	=	Channel.cpp
+
+SRCS	=	main.cpp \
+			$(addprefix Server/, $(SERVER_SRCS)) \
+			$(addprefix Client/, $(CLIENT_SRCS)) \
+			$(addprefix Channel/, $(CHANNEL_SRCS))
 
 OBJS	=	$(addprefix $(OBJ_DIR)/, $(SRCS:.cpp=.o))
 
