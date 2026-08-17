@@ -1,17 +1,15 @@
-#include <iostream>
-#include <cstdlib>
-#include <stdexcept>
 #include "../includes/Server.hpp"
-
-//We have leaks in poll when the CTRL C happens inside the server. Are they valid or need to be handled?
 
 int main(int ac, char *av[])
 {
-	if (ac != 3)
+	if (ac != 3
+	|| std::string(av[2]).empty()
+	|| std::string(av[2]).find_first_of(" \t\r\n\v\f")
+		!= std::string::npos)
 	{
-		std::cerr << "Usage: ./ircserv <port> <password>" << std::endl;
+		std::cerr << "Usage: ./ircserv <port> <password-without-spaces>" << std::endl;
 		return 1;
-	}
+	 }
 	int port = atoi(av[1]);
 	if (port <= 0 || port > 65535){
 		std::cerr << "Error: Port not valid!" << std::endl;

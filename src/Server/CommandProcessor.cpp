@@ -8,18 +8,18 @@ bool Server::_parseCommand(const std::string &line, Command &command) const {
 	command.params.clear();
 	command.hasTrailing = false;
 	command.trailing.clear();
-	while (pos < line.size() && line[pos] == ' ')
+	while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t'))
 		pos++;
 	if (pos == line.size())
 		return false;
 	start = pos;
-	while (pos < line.size() && line[pos] != ' ')
+	while (pos < line.size() && line[pos] != ' ' && line[pos] != '\t')
 		pos++;
 	command.name = line.substr(start, pos - start);
 	for (std::string::size_type i = 0; i < command.name.size(); i++)
 		command.name[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(command.name[i])));
 	while (pos < line.size()) {
-		while (pos < line.size() && line[pos] == ' ')
+		while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t'))
 			pos++;
 		if (pos == line.size())
 			break;
@@ -29,7 +29,7 @@ bool Server::_parseCommand(const std::string &line, Command &command) const {
 			break;
 		}
 		start = pos;
-		while (pos < line.size() && line[pos] != ' ')
+		while (pos < line.size() && line[pos] != ' ' && line[pos] != '\t')
 			pos++;
 		command.params.push_back(line.substr(start, pos - start));
 	}
