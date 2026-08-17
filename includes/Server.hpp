@@ -27,6 +27,19 @@ struct Command {
 	std::string trailing;
 };
 
+struct ModeChange {
+	char sign;
+	char mode;
+	bool hasParameter;
+	std::string parameter;
+};
+
+enum ModeRequestResult {
+	MODE_REQUEST_ERROR,
+	MODE_REQUEST_QUERY,
+	MODE_REQUEST_CHANGE
+};
+
 class Server {
 	private:
 		typedef bool (Server::*CommandHandler)(int, const Command &);
@@ -71,12 +84,14 @@ class Server {
 		bool _kickFromChannel(int fd, Channel &channel, const std::string &targetNickname, const std::string &comment);
 		bool _handleTopic(int fd, const Command &command);
 		bool _handleMode(int fd, const Command &command);
-		bool _validateModeRequest(int fd, std::string channelName, std::string modeString, Channel **channel);
+		ModeRequestResult _prepareModeRequest(int fd, const Command &command, Channel **channel);
+		bool _parseModeChanges(int fd, const Command &command, std::vector<ModeChange> &changes);
+		bool _executeModeChanges(int fd, Channel &channel, const std::vector<ModeChange> &changes);
 		bool _isValidChannelMode(char mode) const;
-		bool _applyMode(int fd, Channel *channel, std::string channelName, std::string &modeString, std::string modeParam);
-		bool _applyKeyMode(int fd, Channel *channel, std::string &modeString, std::string modeParam);
-		bool _applyOperatorMode(int fd, Channel *channel, std::string channelName, std::string &modeString, std::string modeParam);
-		bool _applyLimitMode(int fd, Channel *channel, std::string &modeString, std::string modeParam);
+		bool _applyMode(int fd, Channel *channel, const std::string &channelName, const std::string &modeString, const std::string &modeParam);
+		bool _applyKeyMode(int fd, Channel *channel, const std::string &modeString, const std::string &modeParam);
+		bool _applyOperatorMode(int fd, Channel *channel, const std::string &channelName, const std::string &modeString, const std::string &modeParam);
+		bool _applyLimitMode(int fd, Channel *channel, const std::string &modeString, const std::string &modeParam);
 		int _findClientFdByNick(std::string nick) const;
 		bool _handleInvite(int fd, const Command &command);
 		bool _handleMsg(int fd, const Command &command);

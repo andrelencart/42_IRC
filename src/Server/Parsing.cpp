@@ -35,6 +35,51 @@ bool Server::_parseCommand(const std::string &line, Command &command) const {
 	return !command.name.empty();
 }
 
+bool Server::_parseModeChanges(int fd, const Command &command, std::vector<ModeChange> &changes) {
+	const std::string &modeString = command.params[1];
+	size_t parameterIndex = 2;
+	char sign = '\0';
+	bool errorSent = false;
+
+	changes.clear();
+	for (size_t i = 0; i < modeString.size(); i++) {
+		if (modeString[i] == '+' || modeString[i] == '-') {
+			sign = modeString[i];
+			continue;
+		}
+		if (sign == '\0') {
+			_sendMsg(fd, ERR_UMODEUNKNOWNFLAG());
+			return false;
+		}
+		if (!_isValidChannelMode(modeString[i])) {
+			_sendMsg(fd, ERR_UNKNOWNMODE(std::string(1, modeString[i])));
+			errorSent = true;
+			continue;
+		}
+		ModeChange change;
+		change.sign = sign;
+		change.mode = modeString[i];
+		change.hasParameter = false;
+		change.parameter.clear();
+		bool needsParameter = (change.mode == 'o'
+			|| (change.sign == '+' && change.mode == 'k')
+			|| (change.sign == '+' && change.mode == 'l'));
+		if (needsParameter) {
+			if (parameterIndex >= command.params.size()) {
+				_sendMsg(fd, ERR_NEEDMOREPARAMS("MODE"));
+				errorSent = true;
+				continue;
+			}
+			change.hasParameter = true;
+			change.parameter = command.params[parameterIndex++];
+		}
+		changes.push_back(change);
+	}
+	if (changes.empty() && !errorSent)
+		_sendMsg(fd, ERR_UMODEUNKNOWNFLAG());
+	return !changes.empty();
+}
+
 std::map<std::string, std::string> Server::_buildChannelMap(std::string channel, std::string pass, int fd, int *check){
 	size_t pos = 0;
 	size_t pos2 = 0;
