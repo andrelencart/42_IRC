@@ -345,6 +345,18 @@ Important tests still pending:
 - Invite to an invite-only channel after `MODE +i`.
 - Topic with and without mode `+t`.
 
+## AI Usage
+
+AI tools were used as a learning and development aid during this project. They assisted with:
+
+- Explaining IRC protocol concepts, C++98 syntax, socket programming.
+- Reviewing code structure and suggesting refactoring opportunities.
+- Helping identify edge cases, validation paths, and possible memory-management issues.
+- Suggesting test scenarios for command parsing, channel management, modes, and client disconnections.
+- Assisting with documentation wording.
+
+All code was reviewed, understood, adapted where necessary, and validated by the authors.
+
 ## Note
 
 This README describes the current state of the code and the placeholders still needed to satisfy the subject. Some structures already exist in the code, but still need to be connected to the final commands.
