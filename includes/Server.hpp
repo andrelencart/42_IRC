@@ -98,16 +98,13 @@ class Server {
 		std::map<std::string, std::string> _buildChannelMap(std::string channel, std::string pass, int fd, int *check);
 		bool _parseChannel(std::map<std::string, std::string>::const_iterator channel, int fd);
 		bool buildChan(std::map<std::string, std::string>::const_iterator channel, int fd);
-		void broadcastToChannel(std::string chanName, std::string msg, int fd);
 		void _sendJoinReplies(int fd, Channel &channel);
 		std::string _buildNamesList(const Channel &channel);
 		std::string _clientPrefix(int fd);
 		void _broadcastToChannel(const Channel &channel, const std::string &msg, int exceptFd = -1);
 		void _broadcastChannelCommand(int fd, const Channel &channel, const std::string &command, const std::string &params, const std::string &trailing, int exceptFd = -1);
-		bool _checkDupes(std::string type, std::string toCheck) const;
 		bool _nickInUse(std::string nick, int currentFd) const;
 		//Helpers / Errors
-		int _userToFd(std::string username, int fd, std::string cmdErr);
 		void _removeClientFromChannel(Channel &channel, int fd, const std::string &quitMessage);
 		void _removeClient(int fd);
 		Channel *_getChannel(std::string channelName);
@@ -124,7 +121,7 @@ class Server {
 
 };
 
-void signalhHandler(int sig);
+void signalHandler(int sig);
 
 #define ERR_NOSUCHNICK(nick)				(std::string("401 ") + (nick) + " :No such nick/channel\r\n")
 #define ERR_NOSUCHSERVER(server)			(std::string("402 ") + (server) + " :No such server\r\n")

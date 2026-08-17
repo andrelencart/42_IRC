@@ -32,13 +32,3 @@ void	Server::_broadcastChannelCommand(int fd, const Channel &channel, const std:
 	ss << "\r\n";
 	_broadcastToChannel(channel, ss.str(), exceptFd);
 }
-
-void	Server::broadcastToChannel(std::string chanName, std::string msg, int fd){
-	std::map<std::string, Channel>::iterator finder;
-	std::stringstream ss;
-	finder = _channels.find(chanName);
-	if(finder == _channels.end())
-		return ;
-	ss << finder->second.getName() << ", "<<_clients[fd].getNickname() << ": " << msg << std::endl;
-	_broadcastToChannel(finder->second, ss.str());
-}
