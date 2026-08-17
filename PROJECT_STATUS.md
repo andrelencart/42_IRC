@@ -1,0 +1,563 @@
+# Project Status — ft_irc
+
+Last updated: 2026-08-17
+
+## Current Git state
+
+- Branch: `André'sBranch---Server`
+- Latest commit: `0e38ee4` — Fix INVITE validation, replies, and notifications.
+- Uncommitted organizational work splits the former `Commands.cpp` and
+  `Parsing.cpp` implementations into responsibility-focused server source
+  files. The Makefile source list and the matching declarations in
+  `includes/Server.hpp` have been updated.
+- `ircserv` is an untracked build artifact produced by the verification run.
+
+## Completed work
+
+- Channel cleanup is centralised: removing a client also removes its member,
+  operator, and invitation state from every channel. Empty channels are deleted
+  and remaining members receive a `QUIT` message.
+- `JOIN` consumes an invitation after a successful join, and `KICK` removes all
+  of the target's channel state.
+- The poll loop handles readable, writable, error, hang-up, and invalid client
+  file-descriptor events in one place.
+- Client output is buffered. Replies are queued, `POLLOUT` is enabled only
+  while output is pending, partial sends are retained, and temporary send
+  errors do not disconnect a client.
+- `PASS` errors are sent before the client is disconnected.
+- `SIGPIPE` is ignored so a closed peer cannot terminate the server during
+  `send()`.
+- The README reflects the cleanup and buffered-output implementation.
+- IRC lines are parsed once into a shared `Command` representation containing
+  an uppercase command name, normal parameters, and an optional trailing
+  parameter.
+- Empty lines are ignored safely, lowercase/mixed-case commands are accepted,
+  unsupported commands receive `421`, and the temporary `#` broadcast path
+  has been removed.
+- Registration-only commands are separated from normal commands, which remain
+  blocked until `PASS`, `NICK`, and `USER` complete authentication.
+- Strict `\r\n` framing is retained and the 512-byte IRC line limit prevents
+  an incomplete read buffer from growing without bound.
+- Existing handlers now consume the shared parser result. This also preserves
+  multi-word KICK reasons and distinguishes a TOPIC query from an explicitly
+  empty topic, allowing `TOPIC #channel :` to clear it.
+- The parser/registration implementation was compiled and exercised through
+  local TCP tests covering empty and malformed commands, command-name case,
+  registration ordering, fragmented and batched commands, trailing parameters,
+  and IRC line-size boundaries.
+- JOIN now ignores clients who are already members, validates channel names,
+  sends an existing topic before the names list, and centralizes `332`, `353`,
+  and `366` replies through `_sendJoinReplies()`.
+- A key supplied while creating a channel through JOIN is no longer stored;
+  channel keys are set through `MODE +k` and JOIN keys are used only to enter
+  an existing keyed channel.
+- `PART` now supports comma-separated channels and optional part messages.
+  It sends one departure message per channel, removes all channel state for
+  the departing client, and deletes empty channels.
+- Unknown direct-message recipients now receive `401 ERR_NOSUCHNICK` and are
+  not used as delivery file descriptors.
+- `KICK` validation and execution are separated into `_handleKick()` and
+  `_kickFromChannel()`. The new flow returns the command-specific errors,
+  permits one channel operator to kick another, preserves an explicit empty
+  comment, and deletes a channel if it becomes empty.
+- MODE is split into three phases: `_prepareModeRequest()` finds the channel,
+  answers queries, and checks permissions; `_parseModeChanges()` interprets
+  combined flags and parameters; and `_executeModeChanges()` applies valid
+  operations and broadcasts the successful result once.
+- MODE supports combined flags and sign changes, including `+it`, `+kl key 10`,
+  and `-it+o nick`. The required `i`, `t`, `k`, `o`, and `l` modes consume their
+  correct parameters, and only state changes are broadcast.
+- `MODE #channel` returns `324` with the active flags, a masked key placeholder,
+  and the current limit when present. Invalid, missing, unknown, and
+  permission-restricted mode operations return their existing IRC errors while
+  valid operations in the same mode string continue to be applied.
+- `INVITE` now validates the target nickname, channel, inviter membership,
+  invite-only operator permission, and existing target membership with the
+  appropriate `401`, `403`, `442`, `443`, and `482` replies.
+- Successful invitations are stored for JOIN, work on ordinary and invite-only
+  channels, send a server-prefixed `341 RPL_INVITING` to the inviter, and send
+  a correctly prefixed `INVITE` notification to the target.
+- Server implementation responsibilities are now separated across
+  `ClientIO.cpp`, `CommandProcessor.cpp`, `Registration.cpp`, `Join.cpp`,
+  `ChannelCommands.cpp`, `Mode.cpp`, `Message.cpp`, and `Lookup.cpp` instead of
+  being concentrated in `Commands.cpp` and `Parsing.cpp`.
+- The Makefile now groups Server, Client, and Channel source filenames and uses
+  `addprefix` to construct their paths, keeping the expanded source list
+  unchanged while making it easier to maintain.
+- Removed the unused `_checkDupes()`, `_userToFd()`, and legacy
+  `broadcastToChannel()` implementations and declarations after confirming
+  that they had no callers. Corrected the `signalhHandler` declaration to
+  `signalHandler`.
+
+## Verification already performed
+
+- `make` completed successfully after the networking changes.
+- Socket smoke tests passed for registration, JOIN, direct and channel
+  `PRIVMSG`, TOPIC, `+t`, channel key rejection (`475`), invited `+i` joins,
+  KICK, abrupt disconnect cleanup, and fragmented input.
+- The output-buffering paths were exercised in normal operation. Intentional
+  kernel backpressure/partial-send conditions were not forced.
+- `make` completed successfully with `-std=c++98 -Wall -Wextra -Werror`; an
+  immediate repeated `make` correctly reported that nothing needed rebuilding.
+- Three local socket suites ran 92 scripted checks in total. Their raw results
+  were 31/39, 17/28, and 15/25 passing. One first-suite failure was caused by a
+  test nickname exceeding the server's nine-character limit and passed when
+  rerun with a valid nickname.
+- All checks for the new parser/registration work passed: safe empty input,
+  mixed/lowercase commands, `421`, `451`, one-time registration, fragmented
+  input, multiple commands in one packet, full trailing text, strict `\r\n`,
+  the 512-byte boundary, and oversized-buffer disconnection.
+- Successful command checks included direct/channel `PRIVMSG`, topic set/query,
+  `+t`/`-t`, multi-word KICK reasons, `+k`/key rejection (`475`), `+l`/full
+  rejection (`471`), `+i`/invite-only rejection (`473`), invited join, and
+  `+o`/`-o` privilege changes.
+- `TOPIC #channel :` clears the stored topic and a later query returns `331`,
+  but the broadcast currently omits the explicit empty trailing `:`.
+- Confirmed remaining failures: case-insensitive nick/channel matching;
+  nickname-change notification; one QUIT notice per shared peer; and `PING`,
+  explicit `QUIT`, and `CAP`.
+- A two-client Valgrind scenario covered registration, JOIN, channel PRIVMSG,
+  TOPIC, peer disconnect, and server shutdown. Valgrind reported 0 errors, 0
+  bytes in use at exit, 103 allocations matched by 103 frees, and only the
+  three standard file descriptors open at exit.
+- The JOIN changes compiled successfully and passed all 23 focused socket
+  checks. Coverage included new/existing channels, repeated JOIN, topic reply
+  order, channel-name validation and length boundaries, key creation rules,
+  correct/wrong existing keys, channel limits, invite-only channels, and
+  invited joins. Two initial assertions incorrectly expected a leading space
+  before unprefixed `332`; the raw replies were correct for current formatting
+  and both corrected assertions passed.
+- The `PART` change compiled successfully with a forced rebuild and passed
+  focused two-client TCP checks: multi-channel departure, supplied/default/
+  empty part messages, `461`, `403`, `442`, and empty-channel deletion.
+- The PRIVMSG and KICK changes compiled successfully with a forced rebuild.
+  Focused two-client TCP checks confirmed `401` for an unknown direct-message
+  nickname and successful direct delivery to an existing nickname. KICK
+  coverage included `461`, `403`, `401`, `442`, `441`, and `482`; kicking an
+  operator; supplied, default, and explicitly empty comments; delivery to the
+  kicked client; and deletion of an empty channel.
+- MODE compiled successfully with `-std=c++98 -Wall -Wextra -Werror` and passed
+  51 focused TCP checks. Coverage included queries, combined flags, sign
+  changes, parameter assignment, key masking, permission errors, no-op
+  suppression, unknown flags between valid flags, missing parameters, invalid
+  limits, invalid operator targets, partial success after errors, and MODE
+  broadcasts.
+- A three-client MODE scenario under Valgrind covered queries, combined changes,
+  invalid flags and parameters, operator changes, and disconnect cleanup.
+  Valgrind reported 0 errors, 0 bytes in use at exit, 199 allocations matched by
+  199 frees, and only the three standard file descriptors open at exit.
+- INVITE compiled successfully and passed all 15 focused three-client TCP
+  checks. Coverage included missing parameters, unknown channels and
+  nicknames, inviter membership, existing target membership, ordinary-channel
+  invitations, invite-only operator permission, `341` formatting, target
+  notifications, invitation storage, and successful invited JOINs.
+- The reorganized source completed a clean rebuild with `-std=c++98 -Wall
+  -Wextra -Werror`; a repeated `make` correctly reported that everything was
+  up to date. `git diff --check` passed, all moved `Server` member definitions
+  were checked for unique placement, and the removed functions were confirmed
+  unused.
+- A fresh six-client socket regression suite passed all 65 checks both normally
+  and under Valgrind. Coverage included registration and rejection paths,
+  lowercase commands, fragmented and batched input, JOIN, PART, KICK, INVITE,
+  TOPIC, direct/channel PRIVMSG, abrupt disconnect cleanup, and successful and
+  failing MODE operations for all required `i`, `t`, `k`, `o`, and `l` flags.
+- Valgrind 3.22 reported 0 errors, 0 bytes in use at exit, and 524 allocations
+  matched by 524 frees. File-descriptor tracking showed only the three standard
+  descriptors plus Valgrind's own inherited log-file descriptor.
+
+## Remaining delivery work
+
+The non-blocking output work is complete. Work through these unresolved items
+one at a time, removing or refining entries here as each is completed.
+
+1. **Reference-client compatibility**
+   - Implement `PING` → `PONG`.
+   - Implement explicit `QUIT` using the cleanup path and closing after queued
+     output is flushed.
+   - Add minimal `CAP` handling if required by the selected client.
+   - Send nickname-change notifications after registration and use
+     case-insensitive nickname/channel comparisons.
+   - Support comma-separated `PRIVMSG` recipients if the selected reference
+     client requires them.
+2. **Protocol reply formatting**
+   - Create one numeric-reply helper.
+   - Bring replies into normal IRC form:
+     `:<server> <numeric> <nickname> <parameters> :description\r\n`.
+   - Review all current numeric errors and replace unrelated replies.
+   - Preserve an explicitly empty trailing parameter when broadcasting a
+     cleared topic (`TOPIC #channel :`).
+3. **Disconnect cleanup refinement**
+    - Send at most one `QUIT` notification to each client who shares one or
+      more channels with the disconnecting client.
+    - Keep explicit `QUIT` on the same cleanup path.
+4. **Lower-priority cleanup**
+    - Review `fcntl()` failures and transient `accept()` errors.
+    - Replace `_fds.data()` with a strictly C++98-compatible expression if
+      evaluator portability requires it.
+    - Remove remaining legacy comments and JOIN debug output.
+    - Store the USER real name if desired.
+    - Consider RFC 1459 case mapping for `[]\\` and `{ }|`.
+    - Update the README to match final behaviour.
+5. **Final delivery verification**
+    - Run the complete build/clean cycle under the required C++98 flags.
+    - Test partial and multiple commands in a packet, simultaneous clients,
+      abrupt disconnects, and fd reuse.
+    - Exercise every mandatory command and mode in success and failure cases.
+    - Connect using the selected reference IRC client and check for leaks or
+      crashes.
+
+## Recommended next task
+
+Begin reference-client compatibility with `PING` -> `PONG`, then implement
+explicit `QUIT` through the shared cleanup and buffered-close path. Add minimal
+`CAP` handling afterward if the selected reference client requires it.
+
+## NOTES and COMMENTS
+
+### INVITE flow
+
+For an `INVITE bob #chat` request:
+
+1. Require both the target nickname and channel name.
+2. Confirm `#chat` exists; otherwise send `403 ERR_NOSUCHCHANNEL`.
+3. Confirm `bob` exists; otherwise send `401 ERR_NOSUCHNICK`.
+4. Confirm the inviter belongs to `#chat`; otherwise send
+   `442 ERR_NOTONCHANNEL`.
+5. If `#chat` is invite-only (`+i`), confirm the inviter is a channel
+   operator; otherwise send `482 ERR_CHANOPRIVSNEEDED`.
+6. Confirm `bob` is not already a member; otherwise send
+   `443 ERR_USERONCHANNEL`.
+7. Store Bob's file descriptor in the channel's invitation set.
+8. Send `341 RPL_INVITING` to the inviter.
+9. Send Bob the actual IRC notification:
+
+```text
+:alice!user@localhost INVITE bob :#chat
+```
+
+### MODE flow
+
+MODE is separated into preparation, syntax parsing, and execution so that each
+step has one responsibility:
+
+```text
+_handleMode()
+    ↓ receives the generic Command produced by _parseCommand()
+_prepareModeRequest()
+    ↓ finds the channel, answers queries, or validates a change request
+_parseModeChanges()
+    ↓ converts a combined mode string into individual ModeChange operations
+_executeModeChanges()
+    ↓ calls _applyMode() for each operation and builds one final broadcast
+_applyMode()
+    ↓ delegates +k/-k, +o/-o, and +l/-l to their existing helpers
+```
+
+For example, this client command:
+
+```text
+MODE #chat +kl-o secret 10 bob
+```
+
+first reaches `_handleMode()` as the already tokenized command:
+
+```text
+name   = "MODE"
+params = ["#chat", "+kl-o", "secret", "10", "bob"]
+```
+
+#### 1. `_handleMode()` coordinates the work
+
+`_handleMode()` does not parse individual flags or change channel state
+directly. It calls the three MODE phases in order and stops when preparation
+or parsing cannot produce executable work.
+
+#### 2. `_prepareModeRequest()` finds and validates the target
+
+This phase first requires a channel name and looks up the channel. A missing
+name returns `461 ERR_NEEDMOREPARAMS`; an unknown channel returns
+`403 ERR_NOSUCHCHANNEL`.
+
+`MODE #chat` is a query rather than a change. The function replies with
+`324 RPL_CHANNELMODEIS`, listing active `i`, `t`, `k`, and `l` flags. The key
+is represented by `*`, rather than exposing the password, and the limit is
+included when one is set.
+
+For a change request, such as `MODE #chat +i`, the sender must belong to the
+channel (`442 ERR_NOTONCHANNEL`) and be a channel operator
+(`482 ERR_CHANOPRIVSNEEDED`). Only then does the request proceed to parsing.
+
+#### 3. `_parseModeChanges()` interprets flags and parameters
+
+The parser walks the mode string from left to right. `+` and `-` update the
+current sign; every following mode letter becomes one `ModeChange` entry.
+For the example above it produces:
+
+```text
++k secret
++l 10
+-o bob
+```
+
+It associates parameters with the modes that need them:
+
+- `i` and `t` never need a parameter.
+- `+k` needs a key; `-k` does not.
+- `+l` needs a positive limit; `-l` does not.
+- `+o` and `-o` need a target nickname.
+
+Unknown flags return `472 ERR_UNKNOWNMODE`, and missing required parameters
+return `461 ERR_NEEDMOREPARAMS`. Valid flags elsewhere in the same string are
+still retained, allowing requests such as `+ixt` to apply `+i` and `+t` while
+reporting `x` as unknown.
+
+#### 4. `_executeModeChanges()` applies valid operations once
+
+Each parsed entry is converted to a single mode string, such as `"+k"` or
+`"-o"`, then sent to `_applyMode()`. It collects only operations that actually
+changed channel state and sends one MODE message to the channel members.
+
+For example, when all operations succeed, the earlier request produces:
+
+```text
+:alice!user@localhost MODE #chat +kl-o secret 10 bob
+```
+
+If one operation fails—for example, an invalid `+l` value—the valid operations
+before or after it still run. The failed operation is omitted from the final
+broadcast.
+
+#### 5. `_applyMode()` enforces each individual rule
+
+`_applyMode()` changes `i` and `t` directly after checking whether the state is
+already set. It delegates the parameterized rules to the existing helpers:
+
+- `_applyKeyMode()` sets or removes the key. A second `+k` while a key exists
+  returns `467 ERR_KEYSET`.
+- `_applyOperatorMode()` checks that the target nickname exists and belongs to
+  the channel before adding or removing operator status.
+- `_applyLimitMode()` accepts only positive numeric limits for `+l` and clears
+  the limit for `-l`.
+
+Reapplying an already active mode, removing an inactive mode, or assigning an
+operator state the target already has does not generate a broadcast.
+
+### KICK flow
+
+`KICK` is split into two functions so each has one job:
+
+```text
+_handleKick()
+    ↓ parse channel, target, and optional comment
+    ↓ find the channel and retain its map iterator
+_kickFromChannel()
+    ↓ validate membership, operator status, and target
+    ↓ broadcast KICK and remove target channel state
+_handleKick()
+    ↓ delete the channel when it became empty
+```
+
+This allows `_kickFromChannel()` to work with a `Channel` reference while
+`_handleKick()` retains the map iterator required to erase an empty channel
+safely. A missing comment defaults to the kicker nickname. The KICK line is
+built directly so `KICK #channel nick :` preserves its explicitly empty
+trailing comment.
+
+### Shared command parser and registration changes
+
+The server now parses every IRC command once and gives all handlers the same
+structured result.
+
+#### How it works now
+
+```text
+Socket data
+    ↓
+Client read buffer
+    ↓
+Complete line ending in \r\n
+    ↓
+512-byte limit check
+    ↓
+_parseCommand()
+    ↓
+Registration check
+    ↓
+Command dispatcher
+    ↓
+JOIN / PRIVMSG / KICK / TOPIC / MODE / ...
+```
+
+#### 1. Added the `Command` structure
+
+In `includes/Server.hpp`:
+
+```cpp
+struct Command {
+    std::string name;
+    std::vector<std::string> params;
+    bool hasTrailing;
+    std::string trailing;
+};
+```
+
+For example:
+
+```text
+privmsg #general :Hello everyone
+```
+
+becomes:
+
+```cpp
+name = "PRIVMSG"
+params = ["#general"]
+hasTrailing = true
+trailing = "Hello everyone"
+```
+
+This is better because handlers no longer need to parse the same raw line
+independently.
+
+#### 2. Added `_parseCommand()`
+
+In `src/Server/CommandProcessor.cpp`, the parser:
+
+- Safely ignores empty lines.
+- Removes extra spaces between parameters.
+- Converts only the command name to uppercase.
+- Separates normal parameters.
+- Preserves everything following `:` as one trailing parameter.
+- Records whether `:` was actually present.
+
+Because the command name is normalized:
+
+```text
+join
+Join
+JOIN
+```
+
+all become:
+
+```text
+JOIN
+```
+
+Messages, passwords, nicknames, and topics are not converted.
+
+#### 3. Centralized command dispatch
+
+Previously, `_processCommand()` extracted only the command and first parameter.
+Every handler then parsed the raw line again.
+
+Now it follows this flow:
+
+```cpp
+_parseCommand(line, command);
+_checkRegistration(fd, command);
+_dispatchCommand(fd, command);
+```
+
+The dispatcher searches for the uppercase command name and calls the
+appropriate handler.
+
+Unsupported commands now receive:
+
+```text
+421 <command> :Unknown command
+```
+
+The temporary code that accessed `command[0]` was removed, so empty input can
+no longer cause unsafe indexing there.
+
+#### 4. Improved registration enforcement
+
+Before, the server mainly checked whether `PASS` succeeded.
+
+Now:
+
+- `PASS` must succeed first.
+- `NICK` and `USER` are accepted during registration.
+- Normal commands are blocked until all three registration parts are complete.
+- Unregistered clients receive `451`.
+- Once `PASS`, `NICK`, and `USER` are valid, the client becomes authenticated.
+
+For example, this is rejected:
+
+```text
+PASS password
+JOIN #room
+```
+
+The client must first send:
+
+```text
+PASS password
+NICK john
+USER john 0 * :John Smith
+```
+
+#### 5. Converted existing handlers
+
+`PASS`, `NICK`, `USER`, `JOIN`, `PRIVMSG`, `KICK`, `INVITE`, `TOPIC`, and
+`MODE` now consume the parsed `Command`.
+
+That immediately improves trailing text:
+
+```text
+PRIVMSG bob :Hello there Bob
+```
+
+The complete message remains:
+
+```text
+Hello there Bob
+```
+
+Likewise:
+
+```text
+KICK #room bob :Breaking the channel rules
+```
+
+preserves the entire reason.
+
+#### 6. Fixed empty-topic distinction
+
+Previously, both of these could behave like a query:
+
+```text
+TOPIC #room
+TOPIC #room :
+```
+
+Now:
+
+- No trailing parameter means "show the topic."
+- A present but empty trailing parameter means "clear the topic."
+
+That is why `hasTrailing` is necessary.
+
+#### 7. Added input-size protection
+
+In `src/Server/ClientIO.cpp`, the server now enforces the IRC maximum of 512
+bytes, including `\r\n`.
+
+This prevents a client from continuously sending data without terminating a
+command and growing its read buffer indefinitely.
+
+Strict IRC `\r\n` line endings are retained for now.
+
+Overall, the server is safer and more consistent, and later fixes to `JOIN`,
+`PRIVMSG`, `KICK`, `INVITE`, and `MODE` can use parsed parameters directly. The
+parser and registration changes compiled successfully and passed their focused
+runtime verification on 2026-08-13.
+
+## Starting a new Codex session
+
+Use this prompt:
+
+> Read `AGENTS.md` and `PROJECT_STATUS.md`, inspect the current Git state, and
+> continue with the next unfinished ft_irc item. Explain the planned change and
+> wait for my approval before editing or testing.
