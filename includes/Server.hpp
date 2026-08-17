@@ -178,6 +178,9 @@ void signalhHandler(int sig);
 #define ERR_NOOPERHOST()              		(std::string("491 :No O-lines for your host\r\n"))
 #define ERR_UMODEUNKNOWNFLAG()        		(std::string("501 :Unknown MODE flag\r\n"))
 #define ERR_USERSDONTMATCH()          		(std::string("502 :Cannot change mode for other users\r\n"))
+#define RPL_INVITING(server, nick, user, chan) \
+	(std::string(":") + (server) + " 341 " + (nick) + " " \
+		+ (user) + " " + (chan) + "\r\n")
 #define RPL_NOTOPIC(nick, chan) (std::string("331 ") + (nick) + " " + (chan) + " :No topic is set\r\n")
 #define RPL_TOPIC(nick, chan, topic) (std::string("332 ") + (nick) + " " + (chan) + " :" + (topic) + "\r\n")
 

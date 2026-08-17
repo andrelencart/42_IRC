@@ -255,14 +255,14 @@ bool Server::_handleJoin(int fd, const Command &command)
 	if(check)
 		return false;
 	std::map<std::string, std::string>::const_iterator it;
-    for (it = channels.begin(); it != channels.end(); it++) {
+	for (it = channels.begin(); it != channels.end(); it++) {
 		if(!_parseChannel(it, fd))
 			return false;
-    }
+	}
 	bool ret = true;
 	for (it = channels.begin(); it != channels.end(); it++) {
 		if(!buildChan(it, fd))
 			ret = false;
-    }
+	}
 	return ret;
 }

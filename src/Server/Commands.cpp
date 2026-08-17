@@ -240,32 +240,50 @@ bool Server::_handlePart(int fd, const Command &command)
 
 bool Server::_handleInvite(int fd, const Command &command)
 {
-	std::string username;
-	std::string channel;
-	int user;
+	std::string targetNickname;
+	std::string channelName;
+	std::map<std::string, Channel>::iterator channel;
+	std::stringstream notification;
+	int targetFd;
 
-	if (command.params.size() > 2)
-	{
-		_sendMsg(fd, ERR_TOOMANYTARGETS("INVITE"));
-		return false;
-	}
-	if (command.params.size() < 2){
+	if (command.params.size() < 2) {
 		_sendMsg(fd, ERR_NEEDMOREPARAMS("INVITE"));
 		return false;
 	}
-	username = command.params[0];
-	channel = command.params[1];
-	std::map<std::string, Channel>::iterator it;
-	it = _channels.find(channel);
-	if(it == _channels.end()){
-		_sendMsg(fd, ERR_BADCHANMASK("INVITE"));
+	if (command.params.size() > 2) {
+		_sendMsg(fd, ERR_TOOMANYTARGETS("INVITE"));
 		return false;
 	}
-	if(!it->second.isInviteOnly() && !it->second.hasPass()){
+	targetNickname = command.params[0];
+	channelName = command.params[1];
+	channel = _channels.find(channelName);
+	if (channel == _channels.end()) {
+		_sendMsg(fd, ERR_NOSUCHCHANNEL(channelName));
 		return false;
 	}
-	user = _userToFd(username, fd, "INVITE");
-	it->second.invite(user);
+	targetFd = _findClientFdByNick(targetNickname);
+	if (targetFd == -1) {
+		_sendMsg(fd, ERR_NOSUCHNICK(targetNickname));
+		return false;
+	}
+	if (!channel->second.isMember(fd)) {
+		_sendMsg(fd, ERR_NOTONCHANNEL(channelName));
+		return false;
+	}
+	if (channel->second.isInviteOnly() && !channel->second.isOperator(fd)) {
+		_sendMsg(fd, ERR_CHANOPRIVSNEEDED(channelName));
+		return false;
+	}
+	if (channel->second.isMember(targetFd)) {
+		_sendMsg(fd, ERR_USERONCHANNEL(targetNickname, channelName));
+		return false;
+	}
+	channel->second.invite(targetFd);
+	_sendMsg(fd, RPL_INVITING(_serverName, _clients[fd].getNickname(),
+		targetNickname, channelName));
+	notification << _clientPrefix(fd) << " INVITE " << targetNickname
+		<< " :" << channelName << "\r\n";
+	_sendMsg(targetFd, notification.str());
 	return true;
 }
 
