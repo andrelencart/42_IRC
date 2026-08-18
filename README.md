@@ -97,6 +97,9 @@ src/
 - Temporary `recv`/`send` errors keep the client connected for a later poll cycle.
 - `SIGPIPE` is ignored so a closed client cannot terminate the server during `send`.
 - Disconnect cleanup removes member, operator, and invitation state, deletes empty channels, and notifies remaining members.
+- A selected reference IRC client remained connected for about one hour without
+  `PING` / `PONG`; current client compatibility does not require `PING` /
+  `PONG`, explicit `QUIT`, or `CAP` handling.
 - Commands are parsed once into a shared representation: an uppercase command
   name, normal parameters, and an optional trailing parameter.
 - Empty input is ignored safely; unknown commands receive `421`, and normal
@@ -321,8 +324,6 @@ Current behavior:
 
 ## Remaining Work To Match The Subject
 
-- Add `PING` / `PONG`, explicit `QUIT`, and minimal `CAP` handling as needed
-  for a selected reference IRC client.
 - Make nickname and channel comparisons case-insensitive; announce nickname
   changes after registration.
 - Support comma-separated `PRIVMSG` recipients if required by the reference client.

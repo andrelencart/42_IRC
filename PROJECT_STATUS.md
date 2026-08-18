@@ -1,6 +1,6 @@
 # Project Status — ft_irc
 
-Last updated: 2026-08-17
+Last updated: 2026-08-18
 
 ## Current Git state
 
@@ -88,6 +88,23 @@ Last updated: 2026-08-17
   `broadcastToChannel()` implementations and declarations after confirming
   that they had no callers. Corrected the `signalhHandler` declaration to
   `signalHandler`.
+- Numeric replies now pass through one `_sendNumericReply()` formatter, which
+  adds the configured server prefix, the client nickname or pre-NICK `*`, and
+  the final IRC `\r\n` terminator.
+- The named `ERR_*` and `RPL_*` macros remain the handler-facing interface and
+  now expand into arguments for `_sendNumericReply()`. Numeric codes and reply
+  descriptions therefore remain centralized in `includes/Server.hpp` instead
+  of being repeated in command implementations.
+- The numeric macro block is grouped by purpose and line-wrapped so each reply's
+  code, parameters, and description can be read together without changing its
+  expansion or runtime behaviour.
+- Hard-coded `451` replies and hand-built `001`, `324`, `353`, and `366`
+  replies were migrated to named macros and the common formatter.
+- Unrelated errors were corrected: extra JOIN/INVITE parameters and extra JOIN
+  keys no longer misuse `407` or `461`, channel-mode errors use `472`, and an
+  invalid `+l` value uses `696` instead of the missing-parameter error `461`.
+- Channel command broadcasts now distinguish an absent trailing parameter from
+  an explicitly empty one, so clearing a topic broadcasts `TOPIC #channel :`.
 
 ## Verification already performed
 
@@ -111,11 +128,11 @@ Last updated: 2026-08-17
   `+t`/`-t`, multi-word KICK reasons, `+k`/key rejection (`475`), `+l`/full
   rejection (`471`), `+i`/invite-only rejection (`473`), invited join, and
   `+o`/`-o` privilege changes.
-- `TOPIC #channel :` clears the stored topic and a later query returns `331`,
-  but the broadcast currently omits the explicit empty trailing `:`.
-- Confirmed remaining failures: case-insensitive nick/channel matching;
-  nickname-change notification; one QUIT notice per shared peer; and `PING`,
-  explicit `QUIT`, and `CAP`.
+- Earlier checks confirmed that `TOPIC #channel :` clears the stored topic and
+  a later query returns `331`. Those checks exposed the omitted trailing `:`;
+  the broadcast fix has been implemented but not yet retested.
+- Confirmed remaining failures: case-insensitive nick/channel matching; one
+  QUIT notice per shared peer; and `PING`, explicit `QUIT`, and `CAP`.
 - A two-client Valgrind scenario covered registration, JOIN, channel PRIVMSG,
   TOPIC, peer disconnect, and server shutdown. Valgrind reported 0 errors, 0
   bytes in use at exit, 103 allocations matched by 103 frees, and only the
@@ -164,6 +181,17 @@ Last updated: 2026-08-17
 - Valgrind 3.22 reported 0 errors, 0 bytes in use at exit, and 524 allocations
   matched by 524 frees. File-descriptor tracking showed only the three standard
   descriptors plus Valgrind's own inherited log-file descriptor.
+- A selected reference IRC client remained connected for about one hour without
+  `PING` / `PONG`; no `PING` / `PONG`, explicit `QUIT`, or `CAP` handling is
+  currently required for client compatibility.
+- The numeric-reply changes compiled successfully with `-std=c++98 -Wall
+  -Wextra -Werror`. A focused local socket suite passed all 13 checks: the
+  pre-NICK `451` target, `001`, `421`, `411`, `353`, `366`, `331`, `472`,
+  `696`, and `401` formatting; plus explicit empty TOPIC delivery to both the
+  setter and a channel peer. The test server shut down cleanly afterward.
+- A read-only consistency search found no remaining raw numeric construction,
+  old `_sendMsg(fd, ERR_...)` usage, or obsolete broadcast-helper call
+  signatures.
 
 ## Remaining delivery work
 
@@ -171,26 +199,13 @@ The non-blocking output work is complete. Work through these unresolved items
 one at a time, removing or refining entries here as each is completed.
 
 1. **Reference-client compatibility**
-   - Implement `PING` → `PONG`.
-   - Implement explicit `QUIT` using the cleanup path and closing after queued
-     output is flushed.
-   - Add minimal `CAP` handling if required by the selected client.
-   - Send nickname-change notifications after registration and use
-     case-insensitive nickname/channel comparisons.
+   - Use case-insensitive nickname/channel comparisons.
    - Support comma-separated `PRIVMSG` recipients if the selected reference
      client requires them.
-2. **Protocol reply formatting**
-   - Create one numeric-reply helper.
-   - Bring replies into normal IRC form:
-     `:<server> <numeric> <nickname> <parameters> :description\r\n`.
-   - Review all current numeric errors and replace unrelated replies.
-   - Preserve an explicitly empty trailing parameter when broadcasting a
-     cleared topic (`TOPIC #channel :`).
-3. **Disconnect cleanup refinement**
+2. **Disconnect cleanup refinement**
     - Send at most one `QUIT` notification to each client who shares one or
       more channels with the disconnecting client.
-    - Keep explicit `QUIT` on the same cleanup path.
-4. **Lower-priority cleanup**
+3. **Lower-priority cleanup**
     - Review `fcntl()` failures and transient `accept()` errors.
     - Replace `_fds.data()` with a strictly C++98-compatible expression if
       evaluator portability requires it.
@@ -198,7 +213,7 @@ one at a time, removing or refining entries here as each is completed.
     - Store the USER real name if desired.
     - Consider RFC 1459 case mapping for `[]\\` and `{ }|`.
     - Update the README to match final behaviour.
-5. **Final delivery verification**
+4. **Final delivery verification**
     - Run the complete build/clean cycle under the required C++98 flags.
     - Test partial and multiple commands in a packet, simultaneous clients,
       abrupt disconnects, and fd reuse.
@@ -208,9 +223,9 @@ one at a time, removing or refining entries here as each is completed.
 
 ## Recommended next task
 
-Begin reference-client compatibility with `PING` -> `PONG`, then implement
-explicit `QUIT` through the shared cleanup and buffered-close path. Add minimal
-`CAP` handling afterward if the selected reference client requires it.
+Implement case-insensitive nickname and channel comparisons, then test whether
+the selected reference IRC client requires comma-separated `PRIVMSG`
+recipients.
 
 ## NOTES and COMMENTS
 

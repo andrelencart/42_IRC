@@ -8,12 +8,12 @@ bool Server::_isValidChannelMode(char mode) const {
 ModeRequestResult Server::_prepareModeRequest(int fd, const Command &command,
 	Channel **channel) {
 	if (command.params.empty()) {
-		_sendMsg(fd, ERR_NEEDMOREPARAMS("MODE"));
+		_sendNumericReply(fd, ERR_NEEDMOREPARAMS("MODE"));
 		return MODE_REQUEST_ERROR;
 	}
 	*channel = _getChannel(command.params[0]);
 	if (*channel == NULL) {
-		_sendMsg(fd, ERR_NOSUCHCHANNEL(command.params[0]));
+		_sendNumericReply(fd, ERR_NOSUCHCHANNEL(command.params[0]));
 		return MODE_REQUEST_ERROR;
 	}
 	if (command.params.size() == 1) {
@@ -28,24 +28,20 @@ ModeRequestResult Server::_prepareModeRequest(int fd, const Command &command,
 			modes += "k";
 		if ((*channel)->getUserLimit() > 0)
 			modes += "l";
-		reply << ":" << _serverName
-			<< " 324 " << _clients[fd].getNickname()
-			<< " " << (*channel)->getName()
-			<< " " << modes;
+		reply << (*channel)->getName() << " " << modes;
 		if ((*channel)->hasPass())
 			reply << " *";
 		if ((*channel)->getUserLimit() > 0)
 			reply << " " << (*channel)->getUserLimit();
-		reply << "\r\n";
-		_sendMsg(fd, reply.str());
+		_sendNumericReply(fd, RPL_CHANNELMODEIS(reply.str()));
 		return MODE_REQUEST_QUERY;
 	}
 	if (!(*channel)->isMember(fd)) {
-		_sendMsg(fd, ERR_NOTONCHANNEL((*channel)->getName()));
+		_sendNumericReply(fd, ERR_NOTONCHANNEL((*channel)->getName()));
 		return MODE_REQUEST_ERROR;
 	}
 	if (!(*channel)->isOperator(fd)) {
-		_sendMsg(fd, ERR_CHANOPRIVSNEEDED((*channel)->getName()));
+		_sendNumericReply(fd, ERR_CHANOPRIVSNEEDED((*channel)->getName()));
 		return MODE_REQUEST_ERROR;
 	}
 	return MODE_REQUEST_CHANGE;
@@ -65,11 +61,13 @@ bool Server::_parseModeChanges(int fd, const Command &command,
 			continue;
 		}
 		if (sign == '\0') {
-			_sendMsg(fd, ERR_UMODEUNKNOWNFLAG());
+			_sendNumericReply(fd,
+				ERR_UNKNOWNMODE(std::string(1, modeString[i])));
 			return false;
 		}
 		if (!_isValidChannelMode(modeString[i])) {
-			_sendMsg(fd, ERR_UNKNOWNMODE(std::string(1, modeString[i])));
+			_sendNumericReply(fd,
+				ERR_UNKNOWNMODE(std::string(1, modeString[i])));
 			errorSent = true;
 			continue;
 		}
@@ -83,7 +81,7 @@ bool Server::_parseModeChanges(int fd, const Command &command,
 			|| (change.sign == '+' && change.mode == 'l'));
 		if (needsParameter) {
 			if (parameterIndex >= command.params.size()) {
-				_sendMsg(fd, ERR_NEEDMOREPARAMS("MODE"));
+				_sendNumericReply(fd, ERR_NEEDMOREPARAMS("MODE"));
 				errorSent = true;
 				continue;
 			}
@@ -93,7 +91,7 @@ bool Server::_parseModeChanges(int fd, const Command &command,
 		changes.push_back(change);
 	}
 	if (changes.empty() && !errorSent)
-		_sendMsg(fd, ERR_UMODEUNKNOWNFLAG());
+		_sendNumericReply(fd, ERR_UNKNOWNMODE(modeString));
 	return !changes.empty();
 }
 
@@ -101,11 +99,11 @@ bool Server::_applyKeyMode(int fd, Channel *channel,
 	const std::string &modeString, const std::string &modeParam) {
 	if (modeString == "+k") {
 		if (modeParam.empty()) {
-			_sendMsg(fd, ERR_NEEDMOREPARAMS("MODE"));
+			_sendNumericReply(fd, ERR_NEEDMOREPARAMS("MODE"));
 			return false;
 		}
 		if (channel->hasPass()) {
-			_sendMsg(fd, ERR_KEYSET(channel->getName()));
+			_sendNumericReply(fd, ERR_KEYSET(channel->getName()));
 			return false;
 		}
 		channel->setPass(modeParam);
@@ -121,16 +119,16 @@ bool Server::_applyOperatorMode(int fd, Channel *channel,
 	const std::string &channelName, const std::string &modeString,
 	const std::string &modeParam) {
 	if (modeParam.empty()) {
-		_sendMsg(fd, ERR_NEEDMOREPARAMS("MODE"));
+		_sendNumericReply(fd, ERR_NEEDMOREPARAMS("MODE"));
 		return false;
 	}
 	int targetFd = _findClientFdByNick(modeParam);
 	if (targetFd == -1) {
-		_sendMsg(fd, ERR_NOSUCHNICK(modeParam));
+		_sendNumericReply(fd, ERR_NOSUCHNICK(modeParam));
 		return false;
 	}
 	if (!channel->isMember(targetFd)) {
-		_sendMsg(fd, ERR_USERNOTINCHANNEL(modeParam, channelName));
+		_sendNumericReply(fd, ERR_USERNOTINCHANNEL(modeParam, channelName));
 		return false;
 	}
 	if (modeString == "+o") {
@@ -155,18 +153,20 @@ bool Server::_applyLimitMode(int fd, Channel *channel,
 		return true;
 	}
 	if (modeParam.empty()) {
-		_sendMsg(fd, ERR_NEEDMOREPARAMS("MODE"));
+		_sendNumericReply(fd, ERR_NEEDMOREPARAMS("MODE"));
 		return false;
 	}
 	for (size_t i = 0; i < modeParam.size(); i++) {
 		if (!std::isdigit(static_cast<unsigned char>(modeParam[i]))) {
-			_sendMsg(fd, ERR_NEEDMOREPARAMS("MODE"));
+			_sendNumericReply(fd,
+				ERR_INVALIDMODEPARAM(channel->getName(), "l", modeParam));
 			return false;
 		}
 	}
 	int limit = std::atoi(modeParam.c_str());
 	if (limit <= 0) {
-		_sendMsg(fd, ERR_NEEDMOREPARAMS("MODE"));
+		_sendNumericReply(fd,
+			ERR_INVALIDMODEPARAM(channel->getName(), "l", modeParam));
 		return false;
 	}
 	if (channel->getUserLimit() == limit)
@@ -235,7 +235,8 @@ bool Server::_executeModeChanges(int fd, Channel &channel,
 	std::string broadcastParameters = appliedModes;
 	for (size_t i = 0; i < appliedParameters.size(); i++)
 		broadcastParameters += " " + appliedParameters[i];
-	_broadcastChannelCommand(fd, channel, "MODE", broadcastParameters, "");
+	_broadcastChannelCommand(fd, channel, "MODE", broadcastParameters, "",
+		false);
 	return true;
 }
 
