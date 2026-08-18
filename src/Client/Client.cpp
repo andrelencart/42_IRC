@@ -6,7 +6,7 @@
 /*   By: dicosta- <dicosta-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/25 18:48:58 by dicosta-          #+#    #+#             */
-/*   Updated: 2026/05/27 19:11:45 by dicosta-         ###   ########.fr       */
+/*   Updated: 2026/08/18 14:19:05 by dicosta-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -101,6 +101,9 @@ void Client::setAuth(bool Auth)
 	_Auth = Auth;
 }
 
+
+// Others 
+
 void Client::setCloseAfterWrite(bool closeAfterWrite)
 {
 	_closeAfterWrite = closeAfterWrite;
@@ -124,4 +127,14 @@ void Client::appendWriteBuffer(const std::string &message)
 void Client::eraseWriteBuffer(size_t bytes)
 {
 	_writeBuffer.erase(0, bytes);
+};
+
+
+std::string Client::getLowerCaseNickname() const
+{
+	std::string lowerNickname = _nickname;
+
+	for (unsigned int i = 0; i < lowerNickname.size(); i++)
+		lowerNickname[i] = tolower(lowerNickname[i]);
+	return (lowerNickname);
 };

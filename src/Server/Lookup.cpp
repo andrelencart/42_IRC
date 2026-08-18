@@ -11,8 +11,13 @@ Channel *Server::_getChannel(std::string channelName) {
 bool Server::_nickInUse(std::string nick, int currentFd) const {
 	std::map<int, Client>::const_iterator it;
 
+	std::string lowerCaseNick = nick;
+
+	for (unsigned int i = 0; i < lowerCaseNick.size(); i++)
+		lowerCaseNick[i] = tolower(lowerCaseNick[i]);
+
 	for (it = _clients.begin(); it != _clients.end(); it++) {
-		if (it->first != currentFd && it->second.getNickname() == nick)
+		if (it->first != currentFd && it->second.getLowerCaseNickname() == lowerCaseNick)
 			return true;
 	}
 	return false;

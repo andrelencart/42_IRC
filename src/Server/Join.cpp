@@ -116,7 +116,21 @@ void Server::_sendJoinReplies(int fd, Channel &channel)
 
 bool Server::buildChan(std::map<std::string, std::string>::const_iterator channels,
 	int fd) {
-	std::map<std::string, Channel>::iterator it = _channels.find(channels->first);
+
+	std::string lowerCaseChannel = channels->first;
+	std::map<std::string, Channel>::iterator it;
+	for (unsigned int i = 0; i < lowerCaseChannel.size(); i++)
+		lowerCaseChannel[i] = tolower(lowerCaseChannel[i]);
+	
+	for (it = _channels.begin(); it != _channels.end(); it++)
+	{
+		std::string tempChanName = it->first;
+
+		for (unsigned int i = 0; i < tempChanName.size(); i++)
+			tempChanName[i] = tolower(tempChanName[i]);
+		if (lowerCaseChannel == tempChanName)
+			break;	
+	}
 
 	if (it == _channels.end()) {
 		Channel newChan(channels->first);
