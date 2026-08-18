@@ -327,8 +327,6 @@ Current behavior:
 - Make nickname and channel comparisons case-insensitive; announce nickname
   changes after registration.
 - Support comma-separated `PRIVMSG` recipients if required by the reference client.
-- Create a unified numeric-reply helper and standardize numeric reply formatting.
-- Preserve the explicit empty trailing parameter in a cleared-topic broadcast.
 - Send only one `QUIT` notification to a peer who shares multiple channels with
   the disconnecting client.
 - Review `fcntl()` failures, transient `accept()` errors, portability of
