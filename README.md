@@ -326,7 +326,6 @@ Current behavior:
 
 - Make nickname and channel comparisons case-insensitive; announce nickname
   changes after registration.
-- Support comma-separated `PRIVMSG` recipients if required by the reference client.
 - Send only one `QUIT` notification to a peer who shares multiple channels with
   the disconnecting client.
 - Review `fcntl()` failures, transient `accept()` errors, portability of

@@ -100,6 +100,7 @@ class Server {
 		bool _handleInvite(int fd, const Command &command);
 		bool _handleMsg(int fd, const Command &command);
 		std::map<std::string, std::string> _buildChannelMap(std::string channel, std::string pass, int fd, int *check);
+		std::set<std::string> _buildUserMap(std::string username, int fd, int *check);
 		bool _parseChannel(std::map<std::string, std::string>::const_iterator channel, int fd);
 		bool buildChan(std::map<std::string, std::string>::const_iterator channel, int fd);
 		void _sendJoinReplies(int fd, Channel &channel);
