@@ -6,7 +6,7 @@ bool Server::_handleMsg(int fd, const Command &command) {
 	int user;
 
 	if (command.params.empty()) {
-		_sendMsg(fd, ERR_NORECIPIENT("PRIVMSG"));
+		_sendNumericReply(fd, ERR_NORECIPIENT("PRIVMSG"));
 		return false;
 	}
 	username = command.params[0];
@@ -15,25 +15,26 @@ bool Server::_handleMsg(int fd, const Command &command) {
 	else if (command.params.size() > 1)
 		msg = command.params[1];
 	if (msg.empty()) {
-		_sendMsg(fd, ERR_NOTEXTTOSEND());
+		_sendNumericReply(fd, ERR_NOTEXTTOSEND());
 		return false;
 	}
 	if (username[0] == '#' || username[0] == '&') {
 		Channel *channel = _getChannel(username);
 		if (channel == NULL) {
-			_sendMsg(fd, ERR_NOSUCHCHANNEL(username));
+			_sendNumericReply(fd, ERR_NOSUCHCHANNEL(username));
 			return false;
 		}
 		if (!channel->isMember(fd)) {
-			_sendMsg(fd, ERR_CANNOTSENDTOCHAN(username));
+			_sendNumericReply(fd, ERR_CANNOTSENDTOCHAN(username));
 			return false;
 		}
-		_broadcastChannelCommand(fd, *channel, "PRIVMSG", "", msg, fd);
+		_broadcastChannelCommand(fd, *channel, "PRIVMSG", "", msg, true,
+			fd);
 		return true;
 	}
 	user = _findClientFdByNick(username);
 	if (user == -1) {
-		_sendMsg(fd, ERR_NOSUCHNICK(username));
+		_sendNumericReply(fd, ERR_NOSUCHNICK(username));
 		return false;
 	}
 	std::stringstream ss;

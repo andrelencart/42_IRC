@@ -29,7 +29,7 @@ std::map<std::string, std::string> Server::_buildChannelMap(std::string channel,
 		channels.insert(std::pair<std::string, std::string>(channel.substr(0, pos), temp));
 		channel = channel.substr(pos + 1, channel.size());
 		if (!channel.empty() && channel[0] == ',') {
-			_sendMsg(fd, ERR_BADCHANMASK("JOIN"));
+			_sendNumericReply(fd, ERR_BADCHANMASK(channel));
 			*check = 1;
 		}
 		pos = 0;
@@ -48,10 +48,6 @@ std::map<std::string, std::string> Server::_buildChannelMap(std::string channel,
 		}
 	}
 	channels.insert(std::pair<std::string, std::string>(channel.substr(0, pos), temp));
-	if (!pass.empty()) {
-		_sendMsg(fd, ERR_NEEDMOREPARAMS("JOIN"));
-		*check = 1;
-	}
 	return channels;
 }
 
@@ -60,18 +56,18 @@ bool Server::_parseChannel(std::map<std::string, std::string>::const_iterator it
 	const std::string &name = it->first;
 
 	if (name.empty() || (name[0] != '&' && name[0] != '#')) {
-		_sendMsg(fd, ERR_BADCHANMASK(name));
+		_sendNumericReply(fd, ERR_BADCHANMASK(name));
 		return false;
 	}
 	if (name.size() > 200) {
-		_sendMsg(fd, ERR_BADCHANMASK(name));
+		_sendNumericReply(fd, ERR_BADCHANMASK(name));
 		return false;
 	}
 	for (std::string::size_type i = 0; i < name.size(); i++) {
 		unsigned char character = static_cast<unsigned char>(name[i]);
 
 		if (name[i] == ',' || name[i] == ' ' || std::iscntrl(character)) {
-			_sendMsg(fd, ERR_BADCHANMASK(name));
+			_sendNumericReply(fd, ERR_BADCHANMASK(name));
 			return false;
 		}
 	}
@@ -95,23 +91,11 @@ std::string Server::_buildNamesList(const Channel &channel)
 
 void Server::_sendJoinReplies(int fd, Channel &channel)
 {
-	std::stringstream reply;
-
 	if (!channel.getTopic().empty())
-		_sendMsg(fd, RPL_TOPIC(_clients[fd].getNickname(), channel.getName(), channel.getTopic()));
-	reply << ":" << _serverName
-		<< " 353 " << _clients[fd].getNickname()
-		<< " = " << channel.getName()
-		<< " :" << _buildNamesList(channel)
-		<< "\r\n";
-	_sendMsg(fd, reply.str());
-	reply.str("");
-	reply.clear();
-	reply << ":" << _serverName
-		<< " 366 " << _clients[fd].getNickname()
-		<< " " << channel.getName()
-		<< " :End of /NAMES list.\r\n";
-	_sendMsg(fd, reply.str());
+		_sendNumericReply(fd, RPL_TOPIC(channel.getName(), channel.getTopic()));
+	_sendNumericReply(fd, RPL_NAMREPLY("=", channel.getName(),
+		_buildNamesList(channel)));
+	_sendNumericReply(fd, RPL_ENDOFNAMES(channel.getName()));
 }
 
 bool Server::buildChan(std::map<std::string, std::string>::const_iterator channels,
@@ -124,27 +108,27 @@ bool Server::buildChan(std::map<std::string, std::string>::const_iterator channe
 		newChan.addOperator(fd);
 		_channels.insert(std::pair<std::string, Channel>(channels->first, newChan));
 		it = _channels.find(channels->first);
-		_broadcastChannelCommand(fd, it->second, "JOIN", "", "");
+		_broadcastChannelCommand(fd, it->second, "JOIN", "", "", false);
 		_sendJoinReplies(fd, it->second);
 		return true;
 	}
 	if (it->second.isMember(fd))
 		return true;
 	if (it->second.isFull()) {
-		_sendMsg(fd, ERR_CHANNELISFULL(it->first));
+		_sendNumericReply(fd, ERR_CHANNELISFULL(it->first));
 		return false;
 	}
 	if (it->second.isInviteOnly() && !it->second.isInvited(fd)) {
-		_sendMsg(fd, ERR_INVITEONLYCHAN(it->first));
+		_sendNumericReply(fd, ERR_INVITEONLYCHAN(it->first));
 		return false;
 	}
 	if (it->second.hasPass() && it->second.getPass() != channels->second) {
-		_sendMsg(fd, ERR_BADCHANNELKEY(it->first));
+		_sendNumericReply(fd, ERR_BADCHANNELKEY(it->first));
 		return false;
 	}
 	it->second.addMember(fd);
 	it->second.removeInvite(fd);
-	_broadcastChannelCommand(fd, it->second, "JOIN", "", "");
+	_broadcastChannelCommand(fd, it->second, "JOIN", "", "", false);
 	_sendJoinReplies(fd, it->second);
 	return true;
 }
@@ -156,12 +140,8 @@ bool Server::_handleJoin(int fd, const Command &command)
 	std::map<std::string, std::string> channels;
 	int check = 0;
 
-	if (command.params.size() > 2) {
-		_sendMsg(fd, ERR_TOOMANYTARGETS("JOIN"));
-		return false;
-	}
 	if (command.params.empty()) {
-		_sendMsg(fd, ERR_NEEDMOREPARAMS("JOIN"));
+		_sendNumericReply(fd, ERR_NEEDMOREPARAMS("JOIN"));
 		return false;
 	}
 	channel = command.params[0];
