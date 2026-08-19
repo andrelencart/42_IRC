@@ -174,7 +174,6 @@ bool Server::_handleInvite(int fd, const Command &command) {
 }
 
 bool Server::_handleTopic(int fd, const Command &command) {
-
 	if (command.params.empty()) {
 		_sendNumericReply(fd, ERR_NEEDMOREPARAMS("TOPIC"));
 		return false;
@@ -189,28 +188,37 @@ bool Server::_handleTopic(int fd, const Command &command) {
 		_sendNumericReply(fd, ERR_NOTONCHANNEL(command.params[0]));
 		return false;
 	}
+	if (command.hasTrailing && command.params.size() != 1) {
+		_sendNumericReply(fd, ERR_MALFORMEDTEXT("TOPIC"));
+		return false;
+	}
+	if (!command.hasTrailing && command.params.size() > 2) {
+		_sendNumericReply(fd, ERR_MALFORMEDTEXT("TOPIC"));
+		return false;
+	}
 
-	std::string topic;
-	bool hasTopic = command.hasTrailing || command.params.size() > 1;
+	bool hasTopic = command.hasTrailing || command.params.size() == 2;
 
-	if (!hasTopic)
-	{
+	if (!hasTopic) {
 		if (channel->getTopic().empty())
 			_sendNumericReply(fd, RPL_NOTOPIC(channel->getName()));
 		else
-			_sendNumericReply(fd, RPL_TOPIC(channel->getName(), channel->getTopic()));
+			_sendNumericReply(fd,
+				RPL_TOPIC(channel->getName(), channel->getTopic()));
 		return true;
 	}
-	if (command.hasTrailing)
-		topic = command.trailing;
-	else if (command.params.size() > 1)
-		topic = command.params[1];
-	channel->setTopic(topic);
-	_broadcastChannelCommand(fd, *channel, "TOPIC", "", topic, true);
 	if (channel->isTopicRestricted() && !channel->isOperator(fd)) {
 		_sendNumericReply(fd, ERR_CHANOPRIVSNEEDED(channel->getName()));
 		return false;
 	}
+
+	std::string topic;
+	if (command.hasTrailing)
+		topic = command.trailing;
+	else
+		topic = command.params[1];
+	channel->setTopic(topic);
+	_broadcastChannelCommand(fd, *channel, "TOPIC", "", topic, true);
 
 	return true;
 }

@@ -1,22 +1,19 @@
 # Project Status — ft_irc
 
-Last updated: 2026-08-19
+Last updated: 2026-08-20
 
 ## Current Git state
 
 - Branch: `André'sBranch---Server`
-- Latest commit: `dc1fb9a` — Add the server-console shutdown command and notify
-  connected clients.
-- The branch matches its remote tracking branch.
-- The working tree contains the strict port parser changes in `src/main.cpp`,
-  `includes/Server.hpp`, and `src/Server/CommandProcessor.cpp`; the poll-driven
-  shutdown and console-EOF changes in `includes/Server.hpp` and
-  `src/Server/Server.cpp`; the checked `fcntl()` and transient `accept()` error
-  handling in `src/Server/Server.cpp` and `src/Server/ClientIO.cpp`; the
-  RFC-style nickname validation in `src/Server/Registration.cpp`; the disabled
-  per-command terminal logger in `src/Server/ClientIO.cpp`; this status update;
-  the subject-compliant `README.md` and `.gitignore` development-README entry;
-  and the untracked `ircserv` binary produced by verification.
+- Latest commit: `ab735ce` — Merge pull request #22 from `diogo`.
+- The working tree contains the corrected TOPIC parameter and `+t` permission
+  flow; removal of the unused nickname-lowercasing method; canonical lowercase
+  channel-map insertion while preserving the created channel spelling;
+  post-registration NICK notifications to the changing client and unique
+  shared peers; and this status/documentation update.
+- These post-merge changes passed the required C++98 build cycle, a 104-check
+  consumer-side socket matrix, and the same matrix under Valgrind with its two
+  memory assertions, for 106/106 passing checks.
 
 ## Completed work
 
@@ -366,6 +363,21 @@ Last updated: 2026-08-19
   shutdown, and terminal-output privacy. A final Valgrind lifecycle passed with
   0 errors, 0 bytes in use at exit, 137 allocations matched by 137 frees, and
   only the three standard file descriptors open at exit.
+- The post-merge tree completed `make fclean`, a clean `make`, an immediate
+  no-op `make`, `make clean` followed by `make`, and `make re` with the required
+  `-std=c++98 -Wall -Wextra -Werror` flags.
+- A consumer-side mixed-case channel matrix passed 104/104 checks. It created
+  `#Room` and exercised `#Room`, `#room`, and `#ROOM` through JOIN, channel
+  PRIVMSG, TOPIC, MODE queries and every required `+/- i,t,k,o,l` rule, INVITE,
+  KICK, and PART. It also covered TOPIC queries, one-word and trailing topics,
+  explicit clearing, malformed parameters, missing channels, non-members, and
+  `+t` denial without state mutation or broadcast; NICK self/shared/unrelated
+  delivery, multi-channel deduplication, same/duplicate/invalid/empty names;
+  registration; and clean shutdown notifications and exit.
+- The same complete socket matrix passed under Valgrind with 106/106 checks,
+  including `ERROR SUMMARY: 0 errors` and 0 bytes in use at exit. Descriptor
+  tracking showed the three standard descriptors plus only Valgrind's inherited
+  log-file descriptor.
 - The tracked `README.md` is now subject-compliant and contains the mandatory
   first line plus Description, Instructions, and Resources sections. It records
   verified build, registration, command, shutdown, and policy behavior, provides
@@ -390,31 +402,28 @@ one at a time, removing or refining entries here as each is completed.
     - Consider RFC 1459 case mapping for `[]\\` and `{ }|`.
     - Remove the extra namespace-scope semicolons exposed by a strict pedantic
       C++98 syntax check.
-3. **Final delivery verification**
-    - Run the complete build/clean cycle under the required C++98 flags.
-    - Test partial and multiple commands in a packet, simultaneous clients,
-      abrupt disconnects, and fd reuse.
-    - Exercise every mandatory command and mode in success and failure cases.
-    - Connect using the selected reference IRC client and check for leaks or
-      crashes.
+3. **Final delivery preparation**
+    - Commit the verified post-merge working-tree corrections.
+    - Connect using the selected reference IRC client when one is available.
+    - Perform the final Git status and tracked-file review before submission.
 
 ## Recommended next task
 
-Recheck the deliberately deferred TOPIC and nickname-broadcast behavior after
-merging the teammates' work. Then run reference-client compatibility when
-HexChat, Irssi, or WeeChat becomes available and perform the final pre-delivery
-Git review.
+Commit the verified TOPIC, channel-key, and nickname-broadcast corrections.
+Then run reference-client compatibility when HexChat, Irssi, or WeeChat becomes
+available and perform the final pre-delivery Git review.
 
-## Post-merge recheck backlog
+## Post-merge recheck
 
-These items were deliberately skipped because other team members are currently
-working on the related areas. Keep them visible and recheck them after merging:
-
-- Support a one-word topic without a trailing parameter marker, for example
-  `TOPIC #channel oneword`, while preserving normal query and `:` behavior.
-- Broadcast successful post-registration nickname changes once to the changing
-  client and each shared peer, while retaining the chosen case-sensitive
-  nickname policy.
+- One-word topics without a trailing parameter marker are now supported while
+  preserving normal queries and explicit empty trailing topics.
+- Successful post-registration nickname changes are now sent once to the
+  changing client and each shared peer while retaining case-sensitive nickname
+  lookup.
+- Mixed-case channel creation now uses the same canonical internal key as all
+  later lookups while preserving the spelling used at channel creation.
+- The clean build cycle and focused consumer-side verification are complete;
+  all normal and Valgrind assertions passed.
 
 ### Closed console input flow
 
