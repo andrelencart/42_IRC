@@ -5,12 +5,11 @@ Last updated: 2026-08-19
 ## Current Git state
 
 - Branch: `André'sBranch---Server`
-- Latest commit: `782b410` — Merge pull request #17 from
-  `andrelencart/André'sBranch---Server`.
-- The branch is one commit ahead of its remote tracking branch.
-- Uncommitted work makes channel lookup ASCII case-insensitive while retaining
-  the channel's original display spelling, and adds explicit client `QUIT`
-  handling with unique peer notification and buffered connection closure.
+- Latest commit: `a2958ad` — Implement QUIT handling and deduplicate peer
+  notifications.
+- The branch matches its remote tracking branch.
+- The only current working-tree change is this `PROJECT_STATUS.md` handoff
+  update.
 
 ## Completed work
 
@@ -241,14 +240,26 @@ Last updated: 2026-08-19
 The non-blocking output work is complete. Work through these unresolved items
 one at a time, removing or refining entries here as each is completed.
 
-1. **Reference-client compatibility**
-   - Use case-insensitive nickname/channel comparisons.
+1. **QUIT verification**
+   - Compile the new handler under the required C++98 warning/error flags.
+   - Test QUIT before and after registration; absent, single-word, multi-word,
+     and explicitly empty reasons; queued `ERROR` delivery before closure;
+     channel deletion; operator and invitation cleanup; one notification per
+     peer across multiple shared channels; batched input after QUIT; and abrupt
+     disconnect behavior after the cleanup refactor.
+2. **Graceful server shutdown**
+   - Add a local server-console `shutdown` command instead of exposing an
+     unrestricted IRC `DIE` command.
+   - Stop accepting new clients, queue `ERROR :Server shutting down`, drain
+     buffered output with a finite timeout, close all sockets, and exit normally
+     so connected clients receive a reason and Valgrind can report cleanly.
+3. **Reference-client compatibility**
+   - Keep nicknames case-sensitive as explicitly chosen for this project.
+   - Channel identity is ASCII case-insensitive; special RFC punctuation case
+     mapping remains optional unless the reference client requires it.
    - Confirm the corrected comma-separated `PRIVMSG` behavior with the selected
      reference client during final compatibility testing.
-2. **Disconnect cleanup refinement**
-    - Send at most one `QUIT` notification to each client who shares one or
-      more channels with the disconnecting client.
-3. **Lower-priority cleanup**
+4. **Lower-priority cleanup**
     - Review `fcntl()` failures and transient `accept()` errors.
     - Replace `_fds.data()` with a strictly C++98-compatible expression if
       evaluator portability requires it.
@@ -256,7 +267,7 @@ one at a time, removing or refining entries here as each is completed.
     - Store the USER real name if desired.
     - Consider RFC 1459 case mapping for `[]\\` and `{ }|`.
     - Update the README to match final behaviour.
-4. **Final delivery verification**
+5. **Final delivery verification**
     - Run the complete build/clean cycle under the required C++98 flags.
     - Test partial and multiple commands in a packet, simultaneous clients,
       abrupt disconnects, and fd reuse.
@@ -266,8 +277,8 @@ one at a time, removing or refining entries here as each is completed.
 
 ## Recommended next task
 
-Implement case-insensitive nickname and channel comparisons, taking the partial
-unmerged colleague implementation into account without merging it unchanged.
+Compile and run the focused consumer-side QUIT matrix before implementing the
+separate graceful server-console shutdown path.
 
 ## NOTES and COMMENTS
 

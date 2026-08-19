@@ -10,18 +10,17 @@ void Server::_removeClientFromChannels(int fd, const std::string &reason,
 		return;
 	channel = _channels.begin();
 	while (channel != _channels.end()) {
-		if (channel->second.isMember(fd)) {
-			if (notifyPeers && client->second.getAuth()) {
-				const std::set<int> &members = channel->second.getMembers();
+		if (channel->second.isMember(fd)
+			&& notifyPeers && client->second.getAuth()) {
+			const std::set<int> &members = channel->second.getMembers();
 
-				for (std::set<int>::const_iterator member = members.begin();
-					member != members.end(); member++) {
-					if (*member != fd)
-						recipients.insert(*member);
-				}
+			for (std::set<int>::const_iterator member = members.begin();
+				member != members.end(); member++) {
+				if (*member != fd)
+					recipients.insert(*member);
 			}
-			channel->second.removeClient(fd);
 		}
+		channel->second.removeClient(fd);
 		if (channel->second.getMemberCount() == 0)
 			_channels.erase(channel++);
 		else
