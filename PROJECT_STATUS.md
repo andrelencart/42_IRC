@@ -5,11 +5,12 @@ Last updated: 2026-08-19
 ## Current Git state
 
 - Branch: `André'sBranch---Server`
-- Latest commit: `563f6c7` — Support comma-separated recipients if required by
-  the reference client.
-- Uncommitted work corrects the merged comma-separated `PRIVMSG` handling while
-  retaining its existing `_buildUserMap()` structure and duplicate suppression.
-- `ircserv` is an untracked build artifact produced by the verification run.
+- Latest commit: `782b410` — Merge pull request #17 from
+  `andrelencart/André'sBranch---Server`.
+- The branch is one commit ahead of its remote tracking branch.
+- Uncommitted work makes channel lookup ASCII case-insensitive while retaining
+  the channel's original display spelling, and adds explicit client `QUIT`
+  handling with unique peer notification and buffered connection closure.
 
 ## Completed work
 
@@ -106,9 +107,21 @@ Last updated: 2026-08-19
   an explicitly empty one, so clearing a topic broadcasts `TOPIC #channel :`.
 - Comma-separated `PRIVMSG` targets are processed independently for nicknames,
   channels, and mixed lists. Invalid or empty targets no longer block valid
-  recipients, direct deliveries use their individual target, duplicate targets
-  receive one copy, ambiguous extra parameters are rejected, and the merged
-  debug output has been removed.
+  recipients, direct deliveries use their individual target, exact duplicate
+  target strings receive one copy, ambiguous extra parameters are rejected,
+  and the merged debug output has been removed. Case-variant references to the
+  same channel may deliver separately, which RFC 2810 permits for target lists.
+- Channel identity is now ASCII case-insensitive. `_channels` uses a lowercase
+  internal key while each `Channel` retains the spelling used at creation, so
+  `#Room`, `#room`, and `#ROOM` resolve to one channel while replies and
+  broadcasts consistently use `#Room`. Nicknames intentionally remain
+  case-sensitive by project decision.
+- `QUIT` is accepted before and after registration with default, single-word,
+  multi-word, and explicitly empty reasons. The implementation removes the
+  client from all channel state, notifies each shared peer at most once, queues
+  an `ERROR` closing message to the quitting client, and closes its connection
+  after buffered output is flushed. Abrupt disconnect cleanup now uses the
+  same unique-peer notification path.
 
 ## Verification already performed
 
@@ -135,8 +148,10 @@ Last updated: 2026-08-19
 - Earlier checks confirmed that `TOPIC #channel :` clears the stored topic and
   a later query returns `331`. Those checks exposed the omitted trailing `:`;
   the broadcast fix has been implemented but not yet retested.
-- Confirmed remaining failures: case-insensitive nick/channel matching; one
-  QUIT notice per shared peer; and `PING`, explicit `QUIT`, and `CAP`.
+- An earlier suite identified case-sensitive channel matching, repeated QUIT
+  notices for peers sharing multiple channels, and missing explicit `QUIT` as
+  unresolved. The channel and QUIT implementations have since been added;
+  focused QUIT verification is still pending. `PING` and `CAP` remain absent.
 - A two-client Valgrind scenario covered registration, JOIN, channel PRIVMSG,
   TOPIC, peer disconnect, and server shutdown. Valgrind reported 0 errors, 0
   bytes in use at exit, 103 allocations matched by 103 frees, and only the
@@ -209,6 +224,17 @@ Last updated: 2026-08-19
   commas; missing `:`; empty and missing messages; spaces and tabs; fragmented
   and batched commands; exact 512-byte framing; oversized-client disconnection;
   removal of merged debug output; and continued server operation afterward.
+- The ASCII case-insensitive channel-key change compiled successfully with the
+  Makefile's C++98 warning/error flags. A four-client TCP matrix exercised 30
+  cases across registration, mixed-case JOIN/PRIVMSG/TOPIC/MODE/INVITE/KICK/
+  PART, original-name preservation, case-sensitive nickname lookup, duplicate
+  and malformed input, fragmented and batched commands, and post-error server
+  stability. Twenty-nine initial assertions passed. The remaining assertion
+  observed two deliveries for `PRIVMSG #Room,#room`; RFC 2810 explicitly
+  permits list dispatch without duplicate-path suppression, so this behavior
+  was accepted and left unchanged. The server exited normally with status zero.
+- The explicit `QUIT` implementation was added after that build and socket
+  matrix. It has not yet been compiled or behaviorally tested.
 
 ## Remaining delivery work
 

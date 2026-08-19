@@ -100,14 +100,15 @@ void Server::_sendJoinReplies(int fd, Channel &channel)
 
 bool Server::buildChan(std::map<std::string, std::string>::const_iterator channels,
 	int fd) {
-	std::map<std::string, Channel>::iterator it = _channels.find(channels->first);
+	std::string channelKey = _channelKey(channels->first);
+	std::map<std::string, Channel>::iterator it = _channels.find(channelKey);
 
 	if (it == _channels.end()) {
 		Channel newChan(channels->first);
 		newChan.addMember(fd);
 		newChan.addOperator(fd);
-		_channels.insert(std::pair<std::string, Channel>(channels->first, newChan));
-		it = _channels.find(channels->first);
+		_channels.insert(std::pair<std::string, Channel>(channelKey, newChan));
+		it = _channels.find(channelKey);
 		_broadcastChannelCommand(fd, it->second, "JOIN", "", "", false);
 		_sendJoinReplies(fd, it->second);
 		return true;
@@ -115,15 +116,15 @@ bool Server::buildChan(std::map<std::string, std::string>::const_iterator channe
 	if (it->second.isMember(fd))
 		return true;
 	if (it->second.isFull()) {
-		_sendNumericReply(fd, ERR_CHANNELISFULL(it->first));
+		_sendNumericReply(fd, ERR_CHANNELISFULL(it->second.getName()));
 		return false;
 	}
 	if (it->second.isInviteOnly() && !it->second.isInvited(fd)) {
-		_sendNumericReply(fd, ERR_INVITEONLYCHAN(it->first));
+		_sendNumericReply(fd, ERR_INVITEONLYCHAN(it->second.getName()));
 		return false;
 	}
 	if (it->second.hasPass() && it->second.getPass() != channels->second) {
-		_sendNumericReply(fd, ERR_BADCHANNELKEY(it->first));
+		_sendNumericReply(fd, ERR_BADCHANNELKEY(it->second.getName()));
 		return false;
 	}
 	it->second.addMember(fd);

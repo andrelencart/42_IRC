@@ -44,6 +44,7 @@ void Server::_initCommandHandlers() {
 	_commandHandlers["TOPIC"] = &Server::_handleTopic;
 	_commandHandlers["MODE"] = &Server::_handleMode;
 	_commandHandlers["PRIVMSG"] = &Server::_handleMsg;
+	_commandHandlers["QUIT"] = &Server::_handleQuit;
 }
 
 bool Server::_dispatchCommand(int fd, const Command &command) {
@@ -56,6 +57,8 @@ bool Server::_dispatchCommand(int fd, const Command &command) {
 }
 
 bool Server::_checkRegistration(int fd, const Command &command) {
+	if (command.name == "QUIT")
+		return true;
 	if (command.name == "PASS")
 		return true;
 	if (!_clients[fd].getPassword()) {
