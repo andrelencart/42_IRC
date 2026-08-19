@@ -47,7 +47,7 @@ bool Server::_handleKick(int fd, const Command &command) {
 		comment = command.trailing;
 	else if (command.params.size() > 2)
 		comment = command.params[2];
-	channel = _channels.find(channelName);
+	channel = _channels.find(_channelKey(channelName));
 	if (channel == _channels.end()) {
 		_sendNumericReply(fd, ERR_NOSUCHCHANNEL(channelName));
 		return false;
@@ -64,16 +64,16 @@ bool Server::_partChannel(int fd, const std::string &channelName,
 	std::map<std::string, Channel>::iterator channel;
 	std::stringstream reply;
 
-	channel = _channels.find(channelName);
+	channel = _channels.find(_channelKey(channelName));
 	if (channel == _channels.end()) {
 		_sendNumericReply(fd, ERR_NOSUCHCHANNEL(channelName));
 		return false;
 	}
 	if (!channel->second.isMember(fd)) {
-		_sendNumericReply(fd, ERR_NOTONCHANNEL(channelName));
+		_sendNumericReply(fd, ERR_NOTONCHANNEL(channel->second.getName()));
 		return false;
 	}
-	reply << _clientPrefix(fd) << " PART " << channelName
+	reply << _clientPrefix(fd) << " PART " << channel->second.getName()
 		<< " :" << partMessage << "\r\n";
 	_broadcastToChannel(channel->second, reply.str());
 	channel->second.removeClient(fd);
@@ -122,7 +122,7 @@ bool Server::_handleInvite(int fd, const Command &command) {
 	}
 	targetNickname = command.params[0];
 	channelName = command.params[1];
-	channel = _channels.find(channelName);
+	channel = _channels.find(_channelKey(channelName));
 	if (channel == _channels.end()) {
 		_sendNumericReply(fd, ERR_NOSUCHCHANNEL(channelName));
 		return false;
@@ -145,9 +145,10 @@ bool Server::_handleInvite(int fd, const Command &command) {
 		return false;
 	}
 	channel->second.invite(targetFd);
-	_sendNumericReply(fd, RPL_INVITING(targetNickname, channelName));
+	_sendNumericReply(fd,
+		RPL_INVITING(targetNickname, channel->second.getName()));
 	notification << _clientPrefix(fd) << " INVITE " << targetNickname
-		<< " :" << channelName << "\r\n";
+		<< " :" << channel->second.getName() << "\r\n";
 	_sendMsg(targetFd, notification.str());
 	return true;
 }

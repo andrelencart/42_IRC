@@ -1,7 +1,18 @@
 #include "../../includes/Server.hpp"
 
+std::string Server::_channelKey(const std::string &channelName) const {
+	std::string key = channelName;
+
+	for (std::string::size_type i = 0; i < key.size(); i++) {
+		if (key[i] >= 'A' && key[i] <= 'Z')
+			key[i] = static_cast<char>(key[i] - 'A' + 'a');
+	}
+	return key;
+}
+
 Channel *Server::_getChannel(std::string channelName) {
-	std::map<std::string, Channel>::iterator it = _channels.find(channelName);
+	std::map<std::string, Channel>::iterator it =
+		_channels.find(_channelKey(channelName));
 
 	if (it == _channels.end())
 		return NULL;

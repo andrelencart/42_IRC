@@ -80,6 +80,7 @@ class Server {
 		bool _handlePass(int fd, const Command &command);
 		bool _handleNick(int fd, const Command &command);
 		bool _handleUser(int fd, const Command &command);
+		bool _handleQuit(int fd, const Command &command);
 		void _handleHelp(int fd);
 		bool _handleJoin(int fd, const Command &command);
 		bool _handlePart(int fd, const Command &command);
@@ -117,8 +118,10 @@ class Server {
 			int exceptFd = -1);
 		bool _nickInUse(std::string nick, int currentFd) const;
 		//Helpers / Errors
-		void _removeClientFromChannel(Channel &channel, int fd, const std::string &quitMessage);
+		void _removeClientFromChannels(int fd, const std::string &reason,
+			bool notifyPeers);
 		void _removeClient(int fd);
+		std::string _channelKey(const std::string &channelName) const;
 		Channel *_getChannel(std::string channelName);
 
 		Server(const Server& other);
