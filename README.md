@@ -233,7 +233,7 @@ behavior, channel management, socket programming, and event-driven I/O:
 - [RFC 2810 — Internet Relay Chat: Architecture](https://www.rfc-editor.org/rfc/rfc2810)
 - [RFC 2811 — Internet Relay Chat: Channel Management](https://www.rfc-editor.org/rfc/rfc2811)
 - [RFC 2812 — Internet Relay Chat: Client Protocol](https://www.rfc-editor.org/rfc/rfc2812)
-- [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/)
+
 - Linux manual pages for
   [`socket(2)`](https://man7.org/linux/man-pages/man2/socket.2.html),
   [`poll(2)`](https://man7.org/linux/man-pages/man2/poll.2.html),
