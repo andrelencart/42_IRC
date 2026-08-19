@@ -11,6 +11,10 @@ ModeRequestResult Server::_prepareModeRequest(int fd, const Command &command,
 		_sendNumericReply(fd, ERR_NEEDMOREPARAMS("MODE"));
 		return MODE_REQUEST_ERROR;
 	}
+	if (command.hasTrailing) {
+		_sendNumericReply(fd, ERR_TOOMANYPARAMS("MODE"));
+		return MODE_REQUEST_ERROR;
+	}
 	*channel = _getChannel(command.params[0]);
 	if (*channel == NULL) {
 		_sendNumericReply(fd, ERR_NOSUCHCHANNEL(command.params[0]));
@@ -92,6 +96,10 @@ bool Server::_parseModeChanges(int fd, const Command &command,
 	}
 	if (changes.empty() && !errorSent)
 		_sendNumericReply(fd, ERR_UNKNOWNMODE(modeString));
+	if (parameterIndex != command.params.size()) {
+		_sendNumericReply(fd, ERR_TOOMANYPARAMS("MODE"));
+		return false;
+	}
 	return !changes.empty();
 }
 

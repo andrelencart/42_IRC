@@ -39,6 +39,11 @@ bool Server::_handleQuit(int fd, const Command &command) {
 	std::string reason = "Client Quit";
 	std::string closingReason;
 
+	if ((command.hasTrailing && !command.params.empty())
+		|| (!command.hasTrailing && command.params.size() > 1)) {
+		_sendNumericReply(fd, ERR_MALFORMEDTEXT("QUIT"));
+		return false;
+	}
 	if (command.hasTrailing)
 		reason = command.trailing;
 	else if (!command.params.empty())

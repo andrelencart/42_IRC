@@ -156,6 +156,10 @@ bool Server::_handleJoin(int fd, const Command &command)
 		_sendNumericReply(fd, ERR_NEEDMOREPARAMS("JOIN"));
 		return false;
 	}
+	if (command.hasTrailing || command.params.size() > 2) {
+		_sendNumericReply(fd, ERR_TOOMANYPARAMS("JOIN"));
+		return false;
+	}
 	channel = command.params[0];
 	if (command.params.size() > 1)
 		pass = command.params[1];

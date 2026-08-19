@@ -44,6 +44,11 @@ void Server::_handleHelp(int fd)
 bool Server::_handlePass(int fd, const Command &command) {
 	std::string password;
 
+	if ((command.hasTrailing && !command.params.empty())
+		|| command.params.size() > 1) {
+		_sendNumericReply(fd, ERR_TOOMANYPARAMS("PASS"));
+		return false;
+	}
 	if (!command.params.empty())
 		password = command.params[0];
 	else if (command.hasTrailing)
@@ -68,6 +73,11 @@ bool Server::_handleNick(int fd, const Command &command)
 {
 	std::string nick;
 
+	if ((command.hasTrailing && !command.params.empty())
+		|| command.params.size() > 1) {
+		_sendNumericReply(fd, ERR_TOOMANYPARAMS("NICK"));
+		return false;
+	}
 	if (!command.params.empty())
 		nick = command.params[0];
 	else if (command.hasTrailing)
@@ -95,8 +105,13 @@ bool Server::_handleUser(int fd, const Command &command)
 		_sendNumericReply(fd, ERR_NEEDMOREPARAMS("USER"));
 		return false;
 	}
+	if ((command.hasTrailing && command.params.size() > 3)
+		|| (!command.hasTrailing && command.params.size() > 4)) {
+		_sendNumericReply(fd, ERR_TOOMANYPARAMS("USER"));
+		return false;
+	}
 	if (command.params[1] != "0" || command.params[2] != "*") {
-		_sendNumericReply(fd, ERR_NEEDMOREPARAMS("USER"));
+		_sendNumericReply(fd, ERR_INVALIDUSERPARAMS());
 		return false;
 	}
 	if (!_clients[fd].getUsername().empty()) {
