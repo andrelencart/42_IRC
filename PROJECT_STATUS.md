@@ -1,15 +1,14 @@
 # Project Status — ft_irc
 
-Last updated: 2026-08-18
+Last updated: 2026-08-19
 
 ## Current Git state
 
 - Branch: `André'sBranch---Server`
-- Latest commit: `0e38ee4` — Fix INVITE validation, replies, and notifications.
-- Uncommitted organizational work splits the former `Commands.cpp` and
-  `Parsing.cpp` implementations into responsibility-focused server source
-  files. The Makefile source list and the matching declarations in
-  `includes/Server.hpp` have been updated.
+- Latest commit: `563f6c7` — Support comma-separated recipients if required by
+  the reference client.
+- Uncommitted work corrects the merged comma-separated `PRIVMSG` handling while
+  retaining its existing `_buildUserMap()` structure and duplicate suppression.
 - `ircserv` is an untracked build artifact produced by the verification run.
 
 ## Completed work
@@ -105,6 +104,11 @@ Last updated: 2026-08-18
   invalid `+l` value uses `696` instead of the missing-parameter error `461`.
 - Channel command broadcasts now distinguish an absent trailing parameter from
   an explicitly empty one, so clearing a topic broadcasts `TOPIC #channel :`.
+- Comma-separated `PRIVMSG` targets are processed independently for nicknames,
+  channels, and mixed lists. Invalid or empty targets no longer block valid
+  recipients, direct deliveries use their individual target, duplicate targets
+  receive one copy, ambiguous extra parameters are rejected, and the merged
+  debug output has been removed.
 
 ## Verification already performed
 
@@ -192,6 +196,19 @@ Last updated: 2026-08-18
 - A read-only consistency search found no remaining raw numeric construction,
   old `_sendMsg(fd, ERR_...)` usage, or obsolete broadcast-helper call
   signatures.
+- The merged comma-separated `PRIVMSG` implementation compiled successfully
+  before correction. A consumer-focused local suite kept the server alive but
+  passed only 5 of 13 behavioral assertions. Confirmed failures covered the
+  combined target in delivered messages, incorrect `401` parameters, early
+  abortion after invalid targets, empty list entries, mixed channel/nickname
+  targets, and silent truncation when `:` was omitted from a multi-word message.
+- The corrected implementation compiled successfully with `-std=c++98 -Wall
+  -Wextra -Werror`, and `git diff --check` passed. The complete consumer-focused
+  `PRIVMSG` matrix passed all 24 cases with no skips. Coverage included normal,
+  duplicate, mixed, invalid, forbidden, and empty targets; missing and repeated
+  commas; missing `:`; empty and missing messages; spaces and tabs; fragmented
+  and batched commands; exact 512-byte framing; oversized-client disconnection;
+  removal of merged debug output; and continued server operation afterward.
 
 ## Remaining delivery work
 
@@ -200,8 +217,8 @@ one at a time, removing or refining entries here as each is completed.
 
 1. **Reference-client compatibility**
    - Use case-insensitive nickname/channel comparisons.
-   - Support comma-separated `PRIVMSG` recipients if the selected reference
-     client requires them.
+   - Confirm the corrected comma-separated `PRIVMSG` behavior with the selected
+     reference client during final compatibility testing.
 2. **Disconnect cleanup refinement**
     - Send at most one `QUIT` notification to each client who shares one or
       more channels with the disconnecting client.
@@ -223,9 +240,8 @@ one at a time, removing or refining entries here as each is completed.
 
 ## Recommended next task
 
-Implement case-insensitive nickname and channel comparisons, then test whether
-the selected reference IRC client requires comma-separated `PRIVMSG`
-recipients.
+Implement case-insensitive nickname and channel comparisons, taking the partial
+unmerged colleague implementation into account without merging it unchanged.
 
 ## NOTES and COMMENTS
 

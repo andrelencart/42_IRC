@@ -99,6 +99,10 @@ class Server {
 		int _findClientFdByNick(std::string nick) const;
 		bool _handleInvite(int fd, const Command &command);
 		bool _handleMsg(int fd, const Command &command);
+		bool _parseMsgRequest(int fd, const Command &command,
+			std::set<std::string> &targets, std::string &message, int &check);
+		bool _executeMsgRequest(int fd, const std::set<std::string> &targets,
+			const std::string &message, int check);
 		std::map<std::string, std::string> _buildChannelMap(std::string channel, std::string pass, int fd, int *check);
 		std::set<std::string> _buildUserMap(std::string username, int fd, int *check);
 		bool _parseChannel(std::map<std::string, std::string>::const_iterator channel, int fd);
