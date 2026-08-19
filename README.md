@@ -97,6 +97,9 @@ src/
 - Temporary `recv`/`send` errors keep the client connected for a later poll cycle.
 - `SIGPIPE` is ignored so a closed client cannot terminate the server during `send`.
 - Disconnect cleanup removes member, operator, and invitation state, deletes empty channels, and notifies remaining members.
+- A selected reference IRC client remained connected for about one hour without
+  `PING` / `PONG`; current client compatibility does not require `PING` /
+  `PONG`, explicit `QUIT`, or `CAP` handling.
 - Commands are parsed once into a shared representation: an uppercase command
   name, normal parameters, and an optional trailing parameter.
 - Empty input is ignored safely; unknown commands receive `421`, and normal
@@ -214,10 +217,14 @@ Implemented for individual recipients and channels.
 - Sends direct messages to a connected nickname.
 - Supports trailing messages after `:`.
 - Supports `PRIVMSG #channel :message` and broadcasts it to other channel members.
+- Supports comma-separated nickname and channel recipients, including mixed
+  target lists, while delivering at most one copy to each target.
+- Reports invalid or empty targets independently without preventing delivery
+  to other valid targets in the same list.
 - Rejects an empty recipient, empty message, unknown channel, and sends to channels the client has not joined.
 - Returns `401 ERR_NOSUCHNICK` for an unknown direct-message recipient.
-
-Current limitation: multiple comma-separated recipients are not supported.
+- Rejects ambiguous extra parameters instead of silently truncating the
+  message when a separator or trailing `:` is missing.
 
 ### KICK
 
@@ -321,13 +328,8 @@ Current behavior:
 
 ## Remaining Work To Match The Subject
 
-- Add `PING` / `PONG`, explicit `QUIT`, and minimal `CAP` handling as needed
-  for a selected reference IRC client.
 - Make nickname and channel comparisons case-insensitive; announce nickname
   changes after registration.
-- Support comma-separated `PRIVMSG` recipients if required by the reference client.
-- Create a unified numeric-reply helper and standardize numeric reply formatting.
-- Preserve the explicit empty trailing parameter in a cleared-topic broadcast.
 - Send only one `QUIT` notification to a peer who shares multiple channels with
   the disconnecting client.
 - Review `fcntl()` failures, transient `accept()` errors, portability of

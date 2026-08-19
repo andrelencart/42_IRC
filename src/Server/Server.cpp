@@ -6,7 +6,7 @@
 /*   By: rmota-ma <rmota-ma@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/27 16:49:29 by dicosta-          #+#    #+#             */
-/*   Updated: 2026/06/26 20:55:50 by rmota-ma         ###   ########.fr       */
+/*   Updated: 2026/08/19 18:31:17 by rmota-ma         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,11 +29,35 @@ Server::Server(int port, std::string password, std::string serverName): _port(po
 }
 
 Server::~Server() {
-	for (size_t i = 1; i < _fds.size(); i++)
+	const std::string shutdownMessage =
+		"ERROR :Closing Link: Server Shutdown.\r\n";
+
+	for (size_t i = 1; i < _fds.size(); i++){
+		if(_fds[i].fd == 0)
+			continue;
+		send(_fds[i].fd, shutdownMessage.c_str(), shutdownMessage.size(), 0);
 		close(_fds[i].fd);
+	}
 	if (_servFd != -1)
 		close(_servFd);
 	std::cout << "Server Shutdown!" << std::endl;
+}
+
+void Server::_handleConsoleInput(short revents) {
+	if (!(revents & POLLIN))
+		return;
+
+	char buf[512];
+	ssize_t bytes = read(STDIN_FILENO, buf, sizeof(buf));
+
+	if (bytes <= 0)
+		return;
+	std::string cmd(buf, bytes);
+	for (size_t i = 0; i < cmd.size(); i++)
+		cmd[i] = static_cast<char>(std::tolower(
+			static_cast<unsigned char>(cmd[i])));
+	if (cmd == "shutdown\n")
+		g_stop = 1;
 }
 
 void Server::_setupSocket() {
@@ -65,6 +89,12 @@ void Server::_loopServer() {
 	servPollFd.events = POLLIN; // This Flag means this "wake me up when this fd has data ready to read"
 	servPollFd.revents = 0;
 	_fds.push_back(servPollFd);
+
+	struct pollfd consolePollFd;
+	consolePollFd.fd = STDIN_FILENO;
+	consolePollFd.events = POLLIN; // This Flag means this "wake me up when this fd has data ready to read"
+	consolePollFd.revents = 0;
+	_fds.push_back(consolePollFd);
 	signal(SIGINT, signalHandler);
 	while (!g_stop) {
 		int connected = poll(_fds.data(), _fds.size(), -1);
@@ -78,6 +108,10 @@ void Server::_loopServer() {
 				if (_fds[i].revents & POLLIN)
 					_acceptNewClient();
 				continue;
+			}
+			if (i == 1){
+				_handleConsoleInput(_fds[i].revents);
+				continue ;
 			}
 			int clientFd = _fds[i].fd;
 			short revents = _fds[i].revents;

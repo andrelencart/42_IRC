@@ -30,15 +30,15 @@ bool Server::_handlePass(int fd, const Command &command) {
 	else if (command.hasTrailing)
 		password = command.trailing;
 	if (_clients[fd].getPassword() == true) {
-		_sendMsg(fd, ERR_ALREADYREGISTED());
+		_sendNumericReply(fd, ERR_ALREADYREGISTED());
 		return true;
 	}
 	if (password.empty()) {
-		_sendMsg(fd, ERR_NEEDMOREPARAMS("PASS"));
+		_sendNumericReply(fd, ERR_NEEDMOREPARAMS("PASS"));
 		return true;
 	}
 	if (password != _password) {
-		_sendMsg(fd, ERR_PASSWDMISMATCH());
+		_sendNumericReply(fd, ERR_PASSWDMISMATCH());
 		return true;
 	}
 	_clients[fd].setPassword(true);
@@ -54,23 +54,23 @@ bool Server::_handleNick(int fd, const Command &command)
 	else if (command.hasTrailing)
 		nick = command.trailing;
 	if (nick.empty()) {
-		_sendMsg(fd, ERR_NONICKNAMEGIVEN());
+		_sendNumericReply(fd, ERR_NONICKNAMEGIVEN());
 		return false;
 	}
 	if (nick.size() > 9 || isdigit(nick[0]) || nick[0] == '-') {
-		_sendMsg(fd, ERR_ERRONEUSNICKNAME(nick));
+		_sendNumericReply(fd, ERR_ERRONEUSNICKNAME(nick));
 		return false;
 	}
 	for (size_t i = 0; i < nick.size(); i++) {
 		if (isspace(nick[i]) || !isascii(nick[i]) || nick[i] == '@'
 			|| nick[i] == '!' || nick[i] == '.' || nick[i] == ':'
 			|| nick[i] == ',') {
-			_sendMsg(fd, ERR_ERRONEUSNICKNAME(nick));
+			_sendNumericReply(fd, ERR_ERRONEUSNICKNAME(nick));
 			return false;
 		}
 	}
 	if (_nickInUse(nick, fd)) {
-		_sendMsg(fd, ERR_NICKNAMEINUSE(nick));
+		_sendNumericReply(fd, ERR_NICKNAMEINUSE(nick));
 		return false;
 	}
 	_clients[fd].setNickname(nick);
@@ -81,15 +81,15 @@ bool Server::_handleUser(int fd, const Command &command)
 {
 	if (command.params.size() < 3
 		|| (command.params.size() < 4 && !command.hasTrailing)) {
-		_sendMsg(fd, ERR_NEEDMOREPARAMS("USER"));
+		_sendNumericReply(fd, ERR_NEEDMOREPARAMS("USER"));
 		return false;
 	}
 	if (command.params[1] != "0" || command.params[2] != "*") {
-		_sendMsg(fd, ERR_NEEDMOREPARAMS("USER"));
+		_sendNumericReply(fd, ERR_NEEDMOREPARAMS("USER"));
 		return false;
 	}
 	if (!_clients[fd].getUsername().empty()) {
-		_sendMsg(fd, ERR_ALREADYREGISTED());
+		_sendNumericReply(fd, ERR_ALREADYREGISTED());
 		return false;
 	}
 	_clients[fd].setUsername(command.params[0]);
@@ -101,11 +101,9 @@ void Server::_tryAuthenticateClient(int fd) {
 		&& !_clients[fd].getNickname().empty()
 		&& !_clients[fd].getUsername().empty()) {
 		_clients[fd].setAuth(true);
-		std::stringstream ss;
-		ss << ":" << _serverName << " 001 " << _clients[fd].getNickname()
-			<< " :Welcome to the Internet Relay Network "
-			<< _clients[fd].getNickname() << "!"
-			<< _clients[fd].getUsername() << "@localhost\r\n";
-		_sendMsg(fd, ss.str());
+		_sendNumericReply(fd, RPL_WELCOME(
+			std::string("Welcome to the Internet Relay Network ")
+			+ _clients[fd].getNickname() + "!"
+			+ _clients[fd].getUsername() + "@localhost"));
 	}
 }

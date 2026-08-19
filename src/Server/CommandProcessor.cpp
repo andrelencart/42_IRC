@@ -44,6 +44,7 @@ void Server::_initCommandHandlers() {
 	_commandHandlers["TOPIC"] = &Server::_handleTopic;
 	_commandHandlers["MODE"] = &Server::_handleMode;
 	_commandHandlers["PRIVMSG"] = &Server::_handleMsg;
+	_commandHandlers["QUIT"] = &Server::_handleQuit;
 }
 
 bool Server::_dispatchCommand(int fd, const Command &command) {
@@ -51,20 +52,22 @@ bool Server::_dispatchCommand(int fd, const Command &command) {
 
 	if (it != _commandHandlers.end())
 		return (this->*(it->second))(fd, command);
-	_sendMsg(fd, ERR_UNKNOWNCOMMAND(command.name));
+	_sendNumericReply(fd, ERR_UNKNOWNCOMMAND(command.name));
 	return false;
 }
 
 bool Server::_checkRegistration(int fd, const Command &command) {
+	if (command.name == "QUIT")
+		return true;
 	if (command.name == "PASS")
 		return true;
 	if (!_clients[fd].getPassword()) {
-		_sendMsg(fd, ":server 451 * :You have not registered\r\n");
+		_sendNumericReply(fd, ERR_NOTREGISTERED());
 		return false;
 	}
 	if (command.name != "NICK" && command.name != "USER"
 		&& command.name != "HELP" && !_clients[fd].getAuth()) {
-		_sendMsg(fd, ":server 451 * :You have not registered\r\n");
+		_sendNumericReply(fd, ERR_NOTREGISTERED());
 		return false;
 	}
 	return true;
