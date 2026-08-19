@@ -24,8 +24,6 @@ std::map<std::string, std::string> Server::_buildChannelMap(std::string channel,
 		}
 		else
 			temp = "";
-		std::cout << "pass    " << pass << std::endl;
-		std::cout << "channel    " << channel << std::endl;
 		channels.insert(std::pair<std::string, std::string>(channel.substr(0, pos), temp));
 		channel = channel.substr(pos + 1, channel.size());
 		if (!channel.empty() && channel[0] == ',') {
