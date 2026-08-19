@@ -72,6 +72,7 @@ bool Server::_handlePass(int fd, const Command &command) {
 bool Server::_handleNick(int fd, const Command &command)
 {
 	std::string nick;
+	std::string oldNick;
 
 	if ((command.hasTrailing && !command.params.empty())
 		|| command.params.size() > 1) {
@@ -93,6 +94,27 @@ bool Server::_handleNick(int fd, const Command &command)
 	if (_nickInUse(nick, fd)) {
 		_sendNumericReply(fd, ERR_NICKNAMEINUSE(nick));
 		return false;
+	}
+	oldNick = _clients[fd].getNickname();
+	if (_clients[fd].getAuth() && oldNick != nick) {
+		std::set<int> recipients;
+		std::stringstream notification;
+
+		recipients.insert(fd);
+		for (std::map<std::string, Channel>::const_iterator channel =
+			_channels.begin(); channel != _channels.end(); channel++) {
+			if (!channel->second.isMember(fd))
+				continue;
+			const std::set<int> &members = channel->second.getMembers();
+
+			recipients.insert(members.begin(), members.end());
+		}
+		notification << _clientPrefix(fd) << " NICK :" << nick << "\r\n";
+		_clients[fd].setNickname(nick);
+		for (std::set<int>::const_iterator recipient = recipients.begin();
+			recipient != recipients.end(); recipient++)
+			_sendMsg(*recipient, notification.str());
+		return true;
 	}
 	_clients[fd].setNickname(nick);
 	return true;

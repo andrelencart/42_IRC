@@ -102,7 +102,7 @@ void Client::setAuth(bool Auth)
 }
 
 
-// Others 
+// Others
 
 void Client::setCloseAfterWrite(bool closeAfterWrite)
 {
@@ -127,14 +127,4 @@ void Client::appendWriteBuffer(const std::string &message)
 void Client::eraseWriteBuffer(size_t bytes)
 {
 	_writeBuffer.erase(0, bytes);
-};
-
-
-std::string Client::getLowerCaseNickname() const
-{
-	std::string lowerNickname = _nickname;
-
-	for (unsigned int i = 0; i < lowerNickname.size(); i++)
-		lowerNickname[i] = tolower(lowerNickname[i]);
-	return (lowerNickname);
 };

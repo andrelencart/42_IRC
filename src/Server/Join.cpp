@@ -98,28 +98,15 @@ void Server::_sendJoinReplies(int fd, Channel &channel)
 
 bool Server::buildChan(std::map<std::string, std::string>::const_iterator channels,
 	int fd) {
+	std::string channelKey = _channelKey(channels->first);
+	std::map<std::string, Channel>::iterator it = _channels.find(channelKey);
 
-	std::string lowerCaseChannel = channels->first;
-	std::map<std::string, Channel>::iterator it;
-
-	for (unsigned int i = 0; i < lowerCaseChannel.size(); i++)
-		lowerCaseChannel[i] = tolower(lowerCaseChannel[i]);
-	
-	for (it = _channels.begin(); it != _channels.end(); it++)
-	{
-		std::string tempChanName = it->first;
-
-		for (unsigned int i = 0; i < tempChanName.size(); i++)
-			tempChanName[i] = tolower(tempChanName[i]);
-		if (lowerCaseChannel == tempChanName)
-			break;	
-	}
 	if (it == _channels.end()) {
 		Channel newChan(channels->first);
 		newChan.addMember(fd);
 		newChan.addOperator(fd);
-		_channels.insert(std::pair<std::string, Channel>(channels->first, newChan));
-		it = _channels.find(channels->first);
+		_channels.insert(std::pair<std::string, Channel>(channelKey, newChan));
+		it = _channels.find(channelKey);
 		_broadcastChannelCommand(fd, it->second, "JOIN", "", "", false);
 		_sendJoinReplies(fd, it->second);
 		return true;
