@@ -60,6 +60,7 @@ class Server {
 		std::map<std::string, CommandHandler> _commandHandlers;
 		void _setupSocket();
 		void _loopServer();
+		void _handleConsoleInput(short revents);
 		void _acceptNewClient();
 		bool _handleClient(int fd);
 		bool _handleClientEvents(int fd, short revents);

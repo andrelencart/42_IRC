@@ -29,15 +29,35 @@ Server::Server(int port, std::string password, std::string serverName): _port(po
 }
 
 Server::~Server() {
+	const std::string shutdownMessage =
+		"ERROR :Closing Link: Server Shutdown.\r\n";
+
 	for (size_t i = 1; i < _fds.size(); i++){
 		if(_fds[i].fd == 0)
 			continue;
-		send(_fds[i].fd, "ERROR :Closing Link: Server Shutdown.\r\n", 39, 0);
+		send(_fds[i].fd, shutdownMessage.c_str(), shutdownMessage.size(), 0);
 		close(_fds[i].fd);
 	}
 	if (_servFd != -1)
 		close(_servFd);
 	std::cout << "Server Shutdown!" << std::endl;
+}
+
+void Server::_handleConsoleInput(short revents) {
+	if (!(revents & POLLIN))
+		return;
+
+	char buf[512];
+	ssize_t bytes = read(STDIN_FILENO, buf, sizeof(buf));
+
+	if (bytes <= 0)
+		return;
+	std::string cmd(buf, bytes);
+	for (size_t i = 0; i < cmd.size(); i++)
+		cmd[i] = static_cast<char>(std::tolower(
+			static_cast<unsigned char>(cmd[i])));
+	if (cmd == "shutdown\n")
+		g_stop = 1;
 }
 
 void Server::_setupSocket() {
@@ -75,8 +95,6 @@ void Server::_loopServer() {
 	consolePollFd.events = POLLIN; // This Flag means this "wake me up when this fd has data ready to read"
 	consolePollFd.revents = 0;
 	_fds.push_back(consolePollFd);
-	char buf[512];
-	std::string temp;
 	signal(SIGINT, signalHandler);
 	while (!g_stop) {
 		int connected = poll(_fds.data(), _fds.size(), -1);
@@ -92,15 +110,7 @@ void Server::_loopServer() {
 				continue;
 			}
 			if (i == 1){
-				if (_fds[i].revents & POLLIN){
-					size_t bytes = read(STDIN_FILENO, buf, sizeof(buf));
-					std::string cmd;
-					cmd.append(buf, bytes);
-					for(size_t i = 0; i < bytes; i++)
-						cmd[i] = tolower(cmd[i]);
-					if(cmd == "shutdown\n")
-						g_stop = 1;
-				}
+				_handleConsoleInput(_fds[i].revents);
 				continue ;
 			}
 			int clientFd = _fds[i].fd;
