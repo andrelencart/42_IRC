@@ -52,10 +52,11 @@ class Client
 		void	setCloseAfterWrite(bool closeAfterWrite);
 
 		//Others
-		void	appendReadBuffer(std::string toAppend);
-		void	eraseBuffer(size_t pos);
-		void	appendWriteBuffer(const std::string &message);
-		void	eraseWriteBuffer(size_t bytes);
+		void		appendReadBuffer(std::string toAppend);
+		void		eraseBuffer(size_t pos);
+		void		appendWriteBuffer(const std::string &message);
+		void		eraseWriteBuffer(size_t bytes);
+		std::string getLowerCaseNickname() const;
 };
 
 
