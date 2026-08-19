@@ -60,7 +60,8 @@ class Server {
 		std::map<std::string, CommandHandler> _commandHandlers;
 		void _setupSocket();
 		void _loopServer();
-		void _handleConsoleInput(short revents);
+		void _handleConsoleInput(struct pollfd &consoleFd);
+		void _beginShutdown();
 		void _acceptNewClient();
 		bool _handleClient(int fd);
 		bool _handleClientEvents(int fd, short revents);
@@ -138,6 +139,7 @@ class Server {
 };
 
 void signalHandler(int sig);
+bool parsePort(const std::string &argument, int &port);
 
 // Target and message errors
 #define ERR_NOSUCHNICK(nick) \

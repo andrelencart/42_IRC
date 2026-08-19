@@ -2,37 +2,124 @@
 
 # ft_irc
 
-IRC server written in C++98 for the 42 `ft_irc` project.
+## Description
 
-The goal of this project is to build an IRC server capable of accepting multiple TCP clients at the same time, authenticating users with a password, managing channels, and implementing the mandatory commands required by the subject.
+ft_irc is an Internet Relay Chat server written in C++98. It accepts multiple
+TCP clients simultaneously and provides the essential IRC features required by
+the 42 project: connection authentication, user registration, private messages,
+channels, channel operators, and channel modes.
 
-Useful reference:
+The server uses one `poll()` call to coordinate the listening socket, connected
+clients, console input, and buffered output. All network sockets are
+non-blocking. Incoming data is stored per client until a complete `\r\n`
+terminated IRC command is available, and outgoing data is queued until
+`poll()` reports that the corresponding socket is writable.
+
+### Supported commands
+
+| Command | Purpose |
+|---|---|
+| `PASS` | Authenticate using the server password |
+| `NICK` | Set a nickname |
+| `USER` | Complete user registration |
+| `JOIN` | Create or join one or more channels |
+| `PART` | Leave one or more channels |
+| `PRIVMSG` | Send messages to users or channels |
+| `TOPIC` | View, set, or clear a channel topic |
+| `INVITE` | Invite a user to a channel |
+| `KICK` | Remove a user from a channel |
+| `MODE` | View or modify the required channel modes |
+| `QUIT` | Disconnect with an optional reason |
+| `HELP` | Display the server's short command guide |
+
+The required channel modes are:
+
+| Mode | Effect |
+|---|---|
+| `i` | Make the channel invite-only |
+| `t` | Restrict topic changes to channel operators |
+| `k` | Set or remove the channel key |
+| `o` | Give or remove channel-operator privileges |
+| `l` | Set or remove the channel user limit |
+
+Channel names are compared case-insensitively using ASCII lowercase keys while
+preserving the spelling used when the channel was created. Nicknames are
+case-sensitive by project decision and are validated using the IRC nickname
+character set with a maximum length of nine characters.
+
+The first member of a new channel becomes its operator. When a client leaves,
+is kicked, quits, or disconnects unexpectedly, the server removes its channel
+membership, operator status, and invitations. Empty channels are deleted.
+
+The server supports two clean shutdown paths: `Ctrl+C` and the local console
+command `shutdown`. Connected clients receive
+`ERROR :Closing Link: Server Shutdown.`, pending output is flushed through
+`POLLOUT`, their sockets are closed, and the server exits normally.
+
+### Project structure
 
 ```text
-https://datatracker.ietf.org/doc/html/rfc1459
+includes/
+|-- Channel.hpp
+|-- Client.hpp
+`-- Server.hpp
+
+src/
+|-- main.cpp
+|-- Channel/
+|   `-- Channel.cpp
+|-- Client/
+|   `-- Client.cpp
+`-- Server/
+    |-- Server.cpp
+    |-- ClientIO.cpp
+    |-- CommandProcessor.cpp
+    |-- Registration.cpp
+    |-- Join.cpp
+    |-- ChannelCommands.cpp
+    |-- Mode.cpp
+    |-- Message.cpp
+    |-- Lookup.cpp
+    |-- Replies.cpp
+    `-- Cleanup.cpp
 ```
 
-## Build
+## Instructions
+
+### Requirements
+
+- A Unix-like operating system
+- A C++ compiler supporting C++98
+- GNU Make
+- An available TCP port from `1` to `65535`
+
+No third-party library is required.
+
+### Compilation
+
+Build the server with:
 
 ```bash
 make
 ```
 
-The generated binary is:
+The Makefile compiles with:
 
-```bash
-./ircserv
+```text
+-std=c++98 -Wall -Wextra -Werror
 ```
 
-To clean:
+Available cleanup rules:
 
 ```bash
-make clean
-make fclean
-make re
+make clean   # remove object files
+make fclean  # remove object files and ircserv
+make re      # rebuild everything
 ```
 
-## Usage
+### Starting the server
+
+Run the executable with a port and a password without whitespace:
 
 ```bash
 ./ircserv <port> <password>
@@ -41,348 +128,125 @@ make re
 Example:
 
 ```bash
-./ircserv 6667 pass
+./ircserv 6667 secret
 ```
 
-You can then connect with an IRC client such as `xchat`, `irssi`, `nc`, or another client available on the 42 computers.
+Invalid, signed, partially numeric, zero, and out-of-range ports are rejected.
+The server password must not be empty or contain whitespace.
 
-Basic sequence expected by the current server:
+### Connecting with an IRC client
+
+Configure a client with the following values:
 
 ```text
-PASS pass
-NICK andre
-USER andre
-JOIN #test
-PRIVMSG other :message
+Server:   127.0.0.1
+Port:     6667
+Password: secret
+TLS/SSL:  disabled
 ```
 
-## Structure
+The server expects the standard registration sequence:
 
 ```text
-includes/
-|-- Server.hpp
-|-- Client.hpp
-`-- Channel.hpp
-
-src/
-|-- main.cpp
-|-- Server/
-|   |-- Server.cpp            # socket setup and poll loop
-|   |-- ClientIO.cpp          # read/write buffering and socket I/O
-|   |-- CommandProcessor.cpp  # command dispatch and shared parsing
-|   |-- Registration.cpp      # PASS, NICK, and USER
-|   |-- Join.cpp              # JOIN and join replies
-|   |-- ChannelCommands.cpp   # PART, TOPIC, KICK, and INVITE
-|   |-- Mode.cpp              # channel MODE handling
-|   |-- Message.cpp           # PRIVMSG and HELP
-|   |-- Lookup.cpp            # client and channel lookups
-|   |-- Replies.cpp           # send and broadcast helpers
-|   `-- Cleanup.cpp            # client and channel cleanup
-|-- Client/
-|   `-- Client.cpp
-`-- Channel/
-    `-- Channel.cpp
+PASS secret
+NICK alice
+USER alice 0 * :Alice Example
 ```
 
-## Current State
+An empty or incorrect `PASS` receives an error but remains connected, allowing
+the user to retry. Normal IRC commands remain blocked until `PASS`, `NICK`, and
+`USER` have all completed successfully.
 
-### Server Base
+### Connecting with netcat
 
-- IPv4 TCP socket using `socket`, `bind`, `listen`, and `accept`.
-- Non-blocking sockets using `fcntl`.
-- Client read, write, hangup, and socket-error handling through `poll`.
-- Per-client read buffer for commands ending in `\r\n`, with a 512-byte IRC
-  line limit.
-- Per-client write buffer with `POLLOUT` polling and partial-send handling.
-- Temporary `recv`/`send` errors keep the client connected for a later poll cycle.
-- `SIGPIPE` is ignored so a closed client cannot terminate the server during `send`.
-- Disconnect cleanup removes member, operator, and invitation state, deletes empty channels, and notifies remaining members.
-- A selected reference IRC client remained connected for about one hour without
-  `PING` / `PONG`; current client compatibility does not require `PING` /
-  `PONG`, explicit `QUIT`, or `CAP` handling.
-- Commands are parsed once into a shared representation: an uppercase command
-  name, normal parameters, and an optional trailing parameter.
-- Empty input is ignored safely; unknown commands receive `421`, and normal
-  commands remain unavailable until `PASS`, `NICK`, and `USER` complete registration.
-- Shutdown through `SIGINT`.
-- Makefile configured with `-std=c++98 -Wall -Wextra -Werror`.
-
-### Client
-
-`Client` stores:
-
-- file descriptor
-- nickname
-- username
-- password state
-- authentication state
-- read buffer
-- write buffer for queued outgoing messages
-- close-after-write state for replies that must be delivered before disconnecting
-
-### Channels
-
-`Channel` already has state for:
-
-- channel name
-- password/key
-- topic
-- user limit
-- invite-only mode
-- members
-- operators
-- invited users
-
-## Command Status
-
-### PASS
-
-Implemented for the subject registration requirements.
-
-- Validates the received password.
-- Disconnects the client after delivering the error reply if the password is empty or wrong.
-- Rejects repeated `PASS` after the password has already been accepted.
-
-Current behavior:
-
-- `PASS` with no parameter queues `461` and disconnects after the reply is sent.
-- `PASS` with a wrong password queues `464` and disconnects after the reply is sent.
-- `PASS` with the correct password marks the client password state as accepted.
-- `PASS` after a successful password sends `462` and keeps the client connected.
-
-### NICK
-
-Implemented for the subject registration flow.
-
-- Stores the nickname.
-- Checks for an empty nickname.
-- Checks for duplicate nicknames while ignoring the current client fd.
-- Performs some character validation.
-- Validates invalid characters from the first character onward.
-
-Current limitation: nickname matching is not yet case-insensitive, and a
-successful post-registration nickname change is not announced to shared peers.
-
-### USER
-
-Implemented for the subject registration flow.
-
-- Stores the username.
-- Prevents repeating `USER` after it has already been set.
-- Parses the normal IRC client format:
-
-```text
-Syntax: user/USER <username> 0 * <realname>
-```
-
-- Sends `461 USER :Not enough parameters` when the command does not have enough parameters.
-- Sends `461 USER :Not enough parameters` when the second and third parameters are not `0` and `*`.
-
-Future improvement:
-
-- Store and/or parse the full realname when it contains spaces after `:`.
-
-### JOIN
-
-Implemented.
-
-- Creates channels.
-- Allows joining existing channels.
-- Supports comma-separated channel lists.
-- Makes the first member of a new channel an operator.
-- Ignores a request to join a channel the client already belongs to.
-- Validates channel names.
-- Sends `JOIN`, then the existing topic when present, followed by `353` and `366` replies.
-- Sends `471`, `473`, or `475` when a channel is full, invite-only, or has the wrong key.
-- Consumes a stored invitation after a successful join.
-- A key supplied when creating a channel is ignored; channel keys are set with
-  `MODE +k` and are only used to enter an existing keyed channel.
-
-### PART
-
-Implemented.
-
-- Supports one or more comma-separated channels.
-- Supports an optional part message, including an explicitly empty message.
-- Broadcasts one `PART` message for each channel left.
-- Removes the client from member, operator, and invitation state, and deletes
-  channels that become empty.
-- Reports missing parameters, unknown channels, and attempts to leave a channel
-  the client has not joined.
-
-### PRIVMSG
-
-Implemented for individual recipients and channels.
-
-- Sends direct messages to a connected nickname.
-- Supports trailing messages after `:`.
-- Supports `PRIVMSG #channel :message` and broadcasts it to other channel members.
-- Supports comma-separated nickname and channel recipients, including mixed
-  target lists, while delivering at most one copy to each target.
-- Reports invalid or empty targets independently without preventing delivery
-  to other valid targets in the same list.
-- Rejects an empty recipient, empty message, unknown channel, and sends to channels the client has not joined.
-- Returns `401 ERR_NOSUCHNICK` for an unknown direct-message recipient.
-- Rejects ambiguous extra parameters instead of silently truncating the
-  message when a separator or trailing `:` is missing.
-
-### KICK
-
-Implemented.
-
-- Looks up the channel.
-- Looks up the target user.
-- Checks whether the sender is in the channel and is an operator.
-- Broadcasts the `KICK` command to channel members.
-- Removes the target from member, operator, and invitation state.
-- Supports a multi-word trailing reason, a default reason, and an explicitly
-  empty reason.
-- Reports the command-specific errors for missing parameters, unknown channels
-  or users, membership, target membership, and privileges.
-- Allows one channel operator to kick another operator.
-- Deletes a channel when kicking its last member.
-
-
-### INVITE
-
-Implemented.
-
-- Looks up the channel.
-- Looks up the target nickname.
-- Requires the inviter to be in the channel.
-- Requires the inviter to be a channel operator when the channel is invite-only (`+i`).
-- Rejects unknown users/channels and users who are already members with the
-  appropriate IRC errors.
-- Works for ordinary and invite-only channels, storing the invitation for a
-  later `JOIN`.
-- Sends `341 RPL_INVITING` to the inviter and an `INVITE` notification to the target.
-
-### HELP
-
-Project helper command.
-
-- Shows a small manual connection sequence.
-- This is not part of the mandatory subject commands, but it can help with manual testing.
-
-## Mandatory Operator Commands
-
-### TOPIC
-
-Implemented.
-
-```text
-TOPIC #channel
-TOPIC #channel :new topic
-```
-
-Current behavior:
-
-- View the current topic.
-- Change the topic.
-- Respect mode `+t`, where only operators can change the topic.
-- Send correct numeric replies for an existing topic or no topic.
-- Clear a topic with `TOPIC #channel :`.
-
-Current limitation: the broadcast for a cleared topic does not yet preserve the
-explicit empty trailing `:`.
-
-### MODE
-
-Implemented for channel mode queries and combined changes.
-
-The subject requires channel modes:
-
-```text
-i - invite-only
-t - restrict TOPIC changes to operators
-k - channel password/key
-o - give/remove operator privileges
-l - user limit
-```
-
-Supported examples:
-
-```text
-MODE #channel +i
-MODE #channel -i
-MODE #channel +t
-MODE #channel +k password
-MODE #channel -k
-MODE #channel +o nick
-MODE #channel -o nick
-MODE #channel +l 10
-MODE #channel -l
-MODE #channel +it
-MODE #channel +kl password 10
-MODE #channel -it+o nick
-```
-
-Current behavior:
-
-- `MODE #channel` returns `324` with the active flags, masked key, and limit.
-- Combined flags and sign changes are supported.
-- `i`, `t`, `k`, `o`, and `l` consume their required parameters correctly.
-- Valid changes in a mixed-validity request still apply; only actual changes
-  are broadcast.
-- Invalid, missing, unknown, and permission-restricted operations return IRC errors.
-
-## Remaining Work To Match The Subject
-
-- Make nickname and channel comparisons case-insensitive; announce nickname
-  changes after registration.
-- Send only one `QUIT` notification to a peer who shares multiple channels with
-  the disconnecting client.
-- Review `fcntl()` failures, transient `accept()` errors, portability of
-  `_fds.data()`, and remaining legacy comments/debug output.
-- Perform final compatibility testing with a reference IRC client and the full
-  mandatory-command regression suite.
-
-## Suggested Manual Tests
-
-With `nc`:
+Open a second terminal and connect using a netcat implementation that supports
+CRLF conversion:
 
 ```bash
-nc 127.0.0.1 6667
+nc -C 127.0.0.1 6667
 ```
 
-Then send:
+Register and join a channel:
 
 ```text
-PASS pass
-NICK user1
-USER user1 0 * :<name>
-JOIN #test
+PASS secret
+NICK alice
+USER alice 0 * :Alice Example
+JOIN #chat
 ```
 
-With two clients:
+Connect a second client as `bob`, join the same channel, and try:
 
 ```text
-PASS pass
-NICK user2
-USER user2  0 * :<name>
-JOIN #test
-PRIVMSG user1 :hello
+PRIVMSG alice :Hello Alice
+PRIVMSG #chat :Hello channel
+TOPIC #chat :Project discussion
+MODE #chat +it
+INVITE alice #chat
+KICK #chat alice :Example reason
+PART #chat :Leaving
+QUIT :Goodbye
 ```
 
-The implementation has been exercised with socket regression suites covering
-registration, parsing boundaries, JOIN, PART, PRIVMSG, TOPIC, KICK, INVITE,
-MODE, fragmented/batched input, abrupt disconnect cleanup, and multiple
-clients. Valgrind checks completed for representative and six-client scenarios
-with no reported memory errors or leaks.
+A key for a newly created channel is configured with `MODE +k`. After setting
+one, other clients provide it as the second JOIN argument:
 
-## AI Usage
+```text
+MODE #private +k channelpass
+JOIN #private channelpass
+```
 
-AI tools were used as a learning and development aid during this project. They assisted with:
+Combined mode changes are supported. Parameters are supplied in the order in
+which the corresponding mode letters appear:
 
-- Explaining IRC protocol concepts, C++98 syntax, socket programming.
-- Reviewing code structure and suggesting refactoring opportunities.
-- Helping identify edge cases, validation paths, and possible memory-management issues.
-- Suggesting test scenarios for command parsing, channel management, modes, and client disconnections.
-- Assisting with documentation wording.
+```text
+MODE #chat +it
+MODE #chat +kl channelpass 10
+MODE #chat -it+o alice
+```
 
-All code was reviewed, understood, adapted where necessary, and validated by the authors.
+Use a trailing parameter when a topic, message, or reason contains spaces. An
+explicitly empty trailing parameter clears a topic:
 
-## Note
+```text
+TOPIC #chat :A topic with spaces
+TOPIC #chat :
+```
 
-This README describes the implemented server behaviour and the remaining
-compatibility and protocol-polish work.
+### Stopping the server
+
+In the terminal running `ircserv`, either press `Ctrl+C` or enter:
+
+```text
+shutdown
+```
+
+The shutdown command is local to the server console; it is not an IRC command
+available to remote clients.
+
+## Resources
+
+The following references were used to understand IRC syntax, client-server
+behavior, channel management, socket programming, and event-driven I/O:
+
+- [RFC 1459 — Internet Relay Chat Protocol](https://www.rfc-editor.org/rfc/rfc1459)
+- [RFC 2810 — Internet Relay Chat: Architecture](https://www.rfc-editor.org/rfc/rfc2810)
+- [RFC 2811 — Internet Relay Chat: Channel Management](https://www.rfc-editor.org/rfc/rfc2811)
+- [RFC 2812 — Internet Relay Chat: Client Protocol](https://www.rfc-editor.org/rfc/rfc2812)
+- [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/)
+- Linux manual pages for
+  [`socket(2)`](https://man7.org/linux/man-pages/man2/socket.2.html),
+  [`poll(2)`](https://man7.org/linux/man-pages/man2/poll.2.html),
+  [`recv(2)`](https://man7.org/linux/man-pages/man2/recv.2.html), and
+  [`send(2)`](https://man7.org/linux/man-pages/man2/send.2.html)
+
+### Use of AI
+
+AI tools were used as a supplementary learning and review aid. Their use was
+limited mainly to clarifying selected IRC, C++98, and socket-programming
+concepts; suggesting edge cases for the command parser, client cleanup, and
+shutdown flow; and improving documentation wording.
+
+AI suggestions were treated only as proposals. The authors directed the work,
+reviewed and adapted every change, understood the resulting implementation, and
+performed the final compilation, protocol, stress, and leak verification.

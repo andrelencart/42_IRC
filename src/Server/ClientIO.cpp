@@ -4,10 +4,17 @@ void Server::_acceptNewClient() {
 	struct sockaddr_in clientAddr;
 	socklen_t clientLen = sizeof(clientAddr);
 	int clientFd = accept(_servFd, reinterpret_cast<struct sockaddr*>(&clientAddr), &clientLen);
-	if (clientFd == -1)
+	if (clientFd == -1) {
+		if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK
+			|| errno == ECONNABORTED)
+			return;
 		throw std::runtime_error("accept() failed!");
+	}
 
-	fcntl(clientFd, F_SETFL, O_NONBLOCK);
+	if (fcntl(clientFd, F_SETFL, O_NONBLOCK) == -1) {
+		close(clientFd);
+		return;
+	}
 	Client newClient(clientFd);
 	_clients[clientFd] = newClient;
 	std::cout << "New client connected: fd " << newClient.getClientFD() << std::endl;
@@ -129,8 +136,8 @@ bool Server::_processBuffer(int fd) {
 			return false;
 		}
 		std::string line = buffer.substr(0, pos);
-		if (_clients[fd].getAuth())
-			std::cout << _clients[fd].getNickname() << ": " << line << std::endl;
+		// if (_clients[fd].getAuth())
+		// 	std::cout << _clients[fd].getNickname() << ": " << line << std::endl;
 		_clients[fd].eraseBuffer(pos);
 		if (!_processCommand(fd, line))
 			return false;

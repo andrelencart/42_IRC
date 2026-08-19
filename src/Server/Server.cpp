@@ -29,13 +29,9 @@ Server::Server(int port, std::string password, std::string serverName): _port(po
 }
 
 Server::~Server() {
-	const std::string shutdownMessage =
-		"ERROR :Closing Link: Server Shutdown.\r\n";
-
 	for (size_t i = 1; i < _fds.size(); i++){
-		if(_fds[i].fd == 0)
+		if (_fds[i].fd < 0 || _fds[i].fd == STDIN_FILENO)
 			continue;
-		send(_fds[i].fd, shutdownMessage.c_str(), shutdownMessage.size(), 0);
 		close(_fds[i].fd);
 	}
 	if (_servFd != -1)
@@ -43,21 +39,42 @@ Server::~Server() {
 	std::cout << "Server Shutdown!" << std::endl;
 }
 
-void Server::_handleConsoleInput(short revents) {
-	if (!(revents & POLLIN))
-		return;
+void Server::_handleConsoleInput(struct pollfd &consoleFd) {
+	short revents = consoleFd.revents;
 
-	char buf[512];
-	ssize_t bytes = read(STDIN_FILENO, buf, sizeof(buf));
+	if (revents & POLLIN) {
+		char buf[512];
+		ssize_t bytes = read(STDIN_FILENO, buf, sizeof(buf));
 
-	if (bytes <= 0)
-		return;
-	std::string cmd(buf, bytes);
-	for (size_t i = 0; i < cmd.size(); i++)
-		cmd[i] = static_cast<char>(std::tolower(
-			static_cast<unsigned char>(cmd[i])));
-	if (cmd == "shutdown\n")
-		g_stop = 1;
+		if (bytes > 0) {
+			std::string cmd(buf, bytes);
+
+			for (size_t i = 0; i < cmd.size(); i++)
+				cmd[i] = static_cast<char>(std::tolower(
+					static_cast<unsigned char>(cmd[i])));
+			if (cmd == "shutdown\n")
+				g_stop = 1;
+		}
+		else if (bytes == 0 || (errno != EINTR && errno != EAGAIN
+			&& errno != EWOULDBLOCK))
+			consoleFd.fd = -1;
+	}
+	if (revents & (POLLERR | POLLHUP | POLLNVAL))
+		consoleFd.fd = -1;
+}
+
+void Server::_beginShutdown() {
+	_fds[0].events = 0;
+	for (std::map<int, Client>::iterator it = _clients.begin();
+		it != _clients.end(); it++) {
+		int fd = it->first;
+
+		_removeClientFromChannels(fd, "Server Shutdown", false);
+		if (!it->second.getCloseAfterWrite()) {
+			_sendMsg(fd, "ERROR :Closing Link: Server Shutdown.\r\n");
+			it->second.setCloseAfterWrite(true);
+		}
+	}
 }
 
 void Server::_setupSocket() {
@@ -68,7 +85,8 @@ void Server::_setupSocket() {
 	int opt = 1;
 	if (setsockopt(_servFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1) //Tells the OS to allow reusing the port immediately after the server stops. Without this, if you restart the server quickly you get "address already in use" for ~60 seconds
 		throw std::runtime_error("setsockopt() failed!");
-	fcntl(_servFd, F_SETFL, O_NONBLOCK); //Sets the listening socket to non-blocking mode. This means accept() won't freeze the server if called when no client is waiting — it just returns -1 with EWOULDBLOCK instead
+	if (fcntl(_servFd, F_SETFL, O_NONBLOCK) == -1)
+		throw std::runtime_error("fcntl() failed!");
 
 	struct sockaddr_in addr;
 	std::memset(&addr, 0, sizeof(addr));
@@ -95,12 +113,17 @@ void Server::_loopServer() {
 	consolePollFd.events = POLLIN; // This Flag means this "wake me up when this fd has data ready to read"
 	consolePollFd.revents = 0;
 	_fds.push_back(consolePollFd);
+	bool shuttingDown = false;
 	signal(SIGINT, signalHandler);
-	while (!g_stop) {
-		int connected = poll(_fds.data(), _fds.size(), -1);
+	while (!g_stop || !_clients.empty()) {
+		if (g_stop && !shuttingDown) {
+			shuttingDown = true;
+			_beginShutdown();
+		}
+		int connected = poll(&_fds[0], _fds.size(), -1);
 		if(connected == -1){
 			if (errno == EINTR)
-				break;
+				continue;
 			throw std::runtime_error("poll() failed!");
 		}
 		for(size_t i = 0; i < _fds.size(); i++){
@@ -110,7 +133,7 @@ void Server::_loopServer() {
 				continue;
 			}
 			if (i == 1){
-				_handleConsoleInput(_fds[i].revents);
+				_handleConsoleInput(_fds[i]);
 				continue ;
 			}
 			int clientFd = _fds[i].fd;

@@ -20,8 +20,8 @@ int main(int ac, char *av[])
 		std::cerr << "Password can't contain whitespaces." << std::endl;
 		return 1;
 	}
-	int port = atoi(av[1]);
-	if (port <= 0 || port > 65535){
+	int port;
+	if (!parsePort(av[1], port)) {
 		std::cerr << "Error: Port not valid!" << std::endl;
 		return 1;
 	}
