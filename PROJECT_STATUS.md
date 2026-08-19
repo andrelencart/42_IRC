@@ -5,11 +5,18 @@ Last updated: 2026-08-19
 ## Current Git state
 
 - Branch: `André'sBranch---Server`
-- Latest commit: `a2958ad` — Implement QUIT handling and deduplicate peer
-  notifications.
+- Latest commit: `dc1fb9a` — Add the server-console shutdown command and notify
+  connected clients.
 - The branch matches its remote tracking branch.
-- The only current working-tree change is this `PROJECT_STATUS.md` handoff
-  update.
+- The working tree contains the strict port parser changes in `src/main.cpp`,
+  `includes/Server.hpp`, and `src/Server/CommandProcessor.cpp`; the poll-driven
+  shutdown and console-EOF changes in `includes/Server.hpp` and
+  `src/Server/Server.cpp`; the checked `fcntl()` and transient `accept()` error
+  handling in `src/Server/Server.cpp` and `src/Server/ClientIO.cpp`; the
+  RFC-style nickname validation in `src/Server/Registration.cpp`; the disabled
+  per-command terminal logger in `src/Server/ClientIO.cpp`; this status update;
+  the subject-compliant `README.md` and `.gitignore` development-README entry;
+  and the untracked `ircserv` binary produced by verification.
 
 ## Completed work
 
@@ -23,10 +30,14 @@ Last updated: 2026-08-19
 - Client output is buffered. Replies are queued, `POLLOUT` is enabled only
   while output is pending, partial sends are retained, and temporary send
   errors do not disconnect a client.
-- `PASS` errors are sent before the client is disconnected.
+- `PASS` errors are queued correctly. Empty or incorrect passwords deliberately
+  leave the client connected and unauthenticated so the user can retry; normal
+  commands remain blocked until the correct password is supplied. The final
+  README must describe this retry policy instead of claiming a disconnection.
 - `SIGPIPE` is ignored so a closed peer cannot terminate the server during
   `send()`.
-- The README reflects the cleanup and buffered-output implementation.
+- The README is currently stale and requires its final subject-compliant
+  rewrite after the remaining code corrections.
 - IRC lines are parsed once into a shared `Command` representation containing
   an uppercase command name, normal parameters, and an optional trailing
   parameter.
@@ -199,9 +210,9 @@ Last updated: 2026-08-19
 - Valgrind 3.22 reported 0 errors, 0 bytes in use at exit, and 524 allocations
   matched by 524 frees. File-descriptor tracking showed only the three standard
   descriptors plus Valgrind's own inherited log-file descriptor.
-- A selected reference IRC client remained connected for about one hour without
-  `PING` / `PONG`; no `PING` / `PONG`, explicit `QUIT`, or `CAP` handling is
-  currently required for client compatibility.
+- A selected reference IRC client previously remained connected for about one
+  hour without `PING` / `PONG`; no `PING` / `PONG` or `CAP` handling was needed
+  in that earlier compatibility check.
 - The numeric-reply changes compiled successfully with `-std=c++98 -Wall
   -Wextra -Werror`. A focused local socket suite passed all 13 checks: the
   pre-NICK `451` target, `001`, `421`, `411`, `353`, `366`, `331`, `472`,
@@ -232,42 +243,154 @@ Last updated: 2026-08-19
   observed two deliveries for `PRIVMSG #Room,#room`; RFC 2810 explicitly
   permits list dispatch without duplicate-path suppression, so this behavior
   was accepted and left unchanged. The server exited normally with status zero.
-- The explicit `QUIT` implementation was added after that build and socket
-  matrix. It has not yet been compiled or behaviorally tested.
+- The final consumer-side audit completed a clean build and exercised 149
+  executable assertions. It passed 143 and exposed six discrepancies: numeric
+  port suffixes are accepted, empty/incorrect PASS attempts remain connected,
+  a one-word TOPIC without `:` is treated as a query, nickname changes are not
+  announced to peers, and closed console input causes a busy poll loop.
+- The two PASS observations are now accepted as the intended retry policy, not
+  code failures. Strict port parsing was implemented and verified separately,
+  leaving the TOPIC, nickname-notification, and console-EOF discrepancies to
+  correct.
+- The corrected direct-message check, every required `+/- i,t,k,o,l` path,
+  channel key/limit/invite combinations, operator KICK, invitation/operator fd
+  reuse cleanup, twelve simultaneous clients, and a 3000-message slow-reader
+  stress case all passed.
+- A final Valgrind lifecycle reported 0 errors, 0 bytes in use at exit, and 150
+  allocations matched by 150 frees. A real IRC-client rerun was skipped because
+  HexChat, Irssi, and WeeChat were unavailable; the `nc` consumer check passed.
+- The subject audit found that the direct destructor `send()` occurred outside
+  `poll()` readiness, which is explicitly prohibited. The implementation has
+  now been changed to queue shutdown messages and flush them after `POLLOUT`.
+- The poll-driven shutdown change compiled successfully with the Makefile's
+  C++98 warning/error flags, and a repeated `make` performed no relinking. All
+  six focused shutdown scenarios passed: no clients, an unregistered client,
+  two registered clients with pending HELP output, a slow reader with 8000
+  queued channel messages, SIGINT, and a two-client Valgrind lifecycle.
+- Every tested client received `ERROR :Closing Link: Server Shutdown.` followed
+  by TCP EOF, and the server exited with status 0. The pending HELP output was
+  delivered before the closing ERROR. In the slow-reader case, the server
+  waited for writable readiness, flushed 3,536,076 bytes including the final
+  ERROR, then closed normally.
+- The shutdown Valgrind run reported 0 errors, 0 bytes in use at exit, and 107
+  allocations matched by 107 frees. Descriptor tracking reported only
+  Valgrind's own inherited log descriptor beyond standard input/output/error.
+- A static call-path check confirmed that the only network `send()` remaining
+  is in `_flushClientOutput()`, which is called from the client event handler
+  only when `poll()` reports `POLLOUT`.
+- Console polling now disables the stdin entry by setting its descriptor to
+  `-1` after EOF, `POLLHUP`, `POLLERR`, or `POLLNVAL`. A negative descriptor is
+  ignored by the same `poll()` call, so the server can continue waiting for the
+  listener and clients without repeatedly waking on a permanently closed stdin.
+  The helper processes readable console bytes before disabling a combined
+  `POLLIN | POLLHUP` event, so a final `shutdown` line is not discarded.
+- The console-EOF change compiled successfully and passed all ten focused
+  consumer-side cases. Exact and mixed-case `shutdown` commands exited with
+  status 0, and a final `shutdown\n` immediately followed by EOF was processed
+  before the console descriptor was disabled. Missing-newline, extra-parameter,
+  and deliberately fragmented inputs did not cause an accidental shutdown or
+  crash; each server remained available until its SIGINT cleanup.
+- With stdin attached to `/dev/null`, the server used 0 CPU ticks during a
+  0.5-second sample, continued accepting a client, and completed registration
+  with numeric `001`. SIGINT then delivered
+  `ERROR :Closing Link: Server Shutdown.`, TCP EOF, and server exit status 0.
+  Valgrind reported 0 errors and 0 bytes in use at exit for the same closed-stdin
+  lifecycle.
+- The first registration assertion incorrectly used `consolecheck`, which is
+  longer than the server's nine-character nickname limit; the server correctly
+  returned numeric `432`. The corrected `eofcheck` case received `001` and
+  passed, so this was a test-input error rather than a server failure.
+- Port parsing no longer uses `atoi()`. The shared parsing source now validates
+  every character, accepts only the explicit TCP port range 1 through 65535,
+  and rejects partially numeric and overflowing arguments without integer
+  wraparound.
+- The strict port matrix passed all 14 cases. Valid inputs `6667`, `06667`, and
+  `65535` listened on the expected ports and shut down with status 0. Empty,
+  zero, signed, alphabetic, whitespace-contaminated, suffixed, over-65535, and
+  extremely large values were rejected with status 1. The updated code built
+  with the required flags, and a repeated `make` performed no relinking.
+- The listening and accepted-client `fcntl(F_SETFL, O_NONBLOCK)` results are now
+  checked. A listening-socket failure aborts startup; an accepted-client failure
+  closes only that new descriptor and leaves the server available. `accept()`
+  now returns to `poll()` for `EINTR`, `EAGAIN`, `EWOULDBLOCK`, and
+  `ECONNABORTED`, while unexpected listener errors remain fatal.
+- The socket-error change compiled successfully and passed all nine focused
+  cases: normal registration and poll-driven shutdown; fifty immediate
+  connect/disconnect attempts followed by successful registration; injected
+  `EAGAIN`, `EINTR`, and `ECONNABORTED` accept failures; an injected fatal
+  `EBADF` accept failure; listener and accepted-client `fcntl()` failures; and a
+  closed-stdin Valgrind lifecycle. The accepted-client failure produced EOF for
+  only that client, and the following client received `001`. Valgrind reported
+  0 errors, 0 bytes in use at exit, and normal exit status 0.
+- The poll-array argument now uses `&_fds[0]` instead of the C++11-only
+  `std::vector::data()`. The vector is guaranteed to contain the listener and
+  console entries before the loop reaches `poll()`, so the C++98 expression is
+  valid. The change compiled successfully; a client registered with numeric
+  `001`, then the console `shutdown` command delivered the closing `ERROR`, TCP
+  EOF, and server exit status 0. Both runtime assertions passed.
+- The authenticated per-command terminal logger is commented out while its two
+  lines remain beside the command-processing path for quick local debugging.
+  A focused test confirmed that a channel key and private-message contents no
+  longer appear in the server terminal output.
+- A fresh final audit cross-referenced the complete implementation with the
+  local subject and exercised 172 behavioral assertions. Before the nickname
+  correction, 171 passed and `NICK #bad` was the only failure: it was accepted
+  instead of receiving `432 ERR_ERRONEUSNICKNAME`. The two deliberately skipped
+  post-merge checks were recorded separately and were not counted as failures.
+- The fresh lifecycle matrix passed all 11 checks, including twelve simultaneous
+  clients, clean shutdown with zero/unregistered/registered clients, queued HELP
+  output ordering, mixed-case and malformed console input, SIGINT, closed stdin
+  with zero sampled CPU ticks, and a slow reader receiving 2,360,039 buffered
+  bytes followed by the shutdown error and TCP EOF.
+- A real `nc` consumer registered, joined a channel, sent a message, issued
+  QUIT, received its closing error, and exited normally. A fresh three-client
+  Valgrind lifecycle covered JOIN, MODE, INVITE, PRIVMSG, TOPIC, QUIT, abrupt
+  disconnect, and shutdown. It reported 0 errors, 0 bytes in use at exit, 206
+  allocations matched by 206 frees, and only the three standard descriptors
+  open at exit.
+- The required clean build cycle passed: `make fclean`, clean `make`, repeated
+  `make`, `make clean`, rebuild, and `make re`. `git diff --check` also passed.
+  An optional `-pedantic-errors` syntax check still reports the legacy extra
+  namespace-scope semicolons in `Client.cpp` and `Channel.cpp`; the Makefile's
+  required C++98 warning/error flags compile successfully.
+- Nickname validation now uses an explicit IRC allowlist instead of a blacklist:
+  the first character must be an ASCII letter or IRC special character, later
+  characters may additionally be digits or `-`, and the existing nine-character
+  maximum remains. This rejects channel prefixes and other punctuation as
+  nicknames, avoids non-standard `isascii()` and unsafe ctype calls, and keeps
+  the project's explicitly chosen case-sensitive nickname lookup policy.
+- Post-fix verification passed all 45 checks. The focused nickname matrix passed
+  36/36 valid, invalid, empty, overlength, non-ASCII, retry, duplicate, and
+  case-policy cases. The mandatory-command regression passed 8/8 checks across
+  registration, parsing, JOIN, PRIVMSG, TOPIC, MODE, INVITE, KICK, PART, QUIT,
+  shutdown, and terminal-output privacy. A final Valgrind lifecycle passed with
+  0 errors, 0 bytes in use at exit, 137 allocations matched by 137 frees, and
+  only the three standard file descriptors open at exit.
+- The tracked `README.md` is now subject-compliant and contains the mandatory
+  first line plus Description, Instructions, and Resources sections. It records
+  verified build, registration, command, shutdown, and policy behavior, provides
+  correct client and netcat usage, cites the protocol and networking resources,
+  and includes a concise, truthful AI-use disclosure. The previous detailed
+  README is preserved locally as ignored `README_DEVELOPMENT.md`.
 
 ## Remaining delivery work
 
 The non-blocking output work is complete. Work through these unresolved items
 one at a time, removing or refining entries here as each is completed.
 
-1. **QUIT verification**
-   - Compile the new handler under the required C++98 warning/error flags.
-   - Test QUIT before and after registration; absent, single-word, multi-word,
-     and explicitly empty reasons; queued `ERROR` delivery before closure;
-     channel deletion; operator and invitation cleanup; one notification per
-     peer across multiple shared channels; batched input after QUIT; and abrupt
-     disconnect behavior after the cleanup refactor.
-2. **Graceful server shutdown**
-   - Add a local server-console `shutdown` command instead of exposing an
-     unrestricted IRC `DIE` command.
-   - Stop accepting new clients, queue `ERROR :Server shutting down`, drain
-     buffered output with a finite timeout, close all sockets, and exit normally
-     so connected clients receive a reason and Valgrind can report cleanly.
-3. **Reference-client compatibility**
+1. **Reference-client compatibility**
    - Keep nicknames case-sensitive as explicitly chosen for this project.
    - Channel identity is ASCII case-insensitive; special RFC punctuation case
      mapping remains optional unless the reference client requires it.
    - Confirm the corrected comma-separated `PRIVMSG` behavior with the selected
      reference client during final compatibility testing.
-4. **Lower-priority cleanup**
-    - Review `fcntl()` failures and transient `accept()` errors.
-    - Replace `_fds.data()` with a strictly C++98-compatible expression if
-      evaluator portability requires it.
+2. **Subject and portability cleanup**
     - Remove remaining legacy comments and JOIN debug output.
     - Store the USER real name if desired.
     - Consider RFC 1459 case mapping for `[]\\` and `{ }|`.
-    - Update the README to match final behaviour.
-5. **Final delivery verification**
+    - Remove the extra namespace-scope semicolons exposed by a strict pedantic
+      C++98 syntax check.
+3. **Final delivery verification**
     - Run the complete build/clean cycle under the required C++98 flags.
     - Test partial and multiple commands in a packet, simultaneous clients,
       abrupt disconnects, and fd reuse.
@@ -277,8 +400,67 @@ one at a time, removing or refining entries here as each is completed.
 
 ## Recommended next task
 
-Compile and run the focused consumer-side QUIT matrix before implementing the
-separate graceful server-console shutdown path.
+Recheck the deliberately deferred TOPIC and nickname-broadcast behavior after
+merging the teammates' work. Then run reference-client compatibility when
+HexChat, Irssi, or WeeChat becomes available and perform the final pre-delivery
+Git review.
+
+## Post-merge recheck backlog
+
+These items were deliberately skipped because other team members are currently
+working on the related areas. Keep them visible and recheck them after merging:
+
+- Support a one-word topic without a trailing parameter marker, for example
+  `TOPIC #channel oneword`, while preserving normal query and `:` behavior.
+- Broadcast successful post-registration nickname changes once to the changing
+  client and each shared peer, while retaining the chosen case-sensitive
+  nickname policy.
+
+### Closed console input flow
+
+Before this change:
+
+```text
+poll() reports stdin POLLHUP
+→ the console helper ignores it because there is no POLLIN
+→ poll() immediately reports the same POLLHUP
+→ the server repeats continuously and consumes CPU
+```
+
+After this change:
+
+```text
+poll() reports stdin EOF, POLLHUP, POLLERR, or POLLNVAL
+→ the console pollfd is set to -1
+→ the same poll() ignores that entry
+→ the server waits normally for listener and client events
+```
+
+No additional `poll()` is introduced, stdin is not explicitly closed, and
+interactive console behavior is unchanged while stdin remains available.
+
+### Poll-driven server shutdown flow
+
+```text
+Iteration 1:
+poll() reports stdin POLLIN
+→ read "shutdown"
+→ g_stop = 1
+
+Iteration 2:
+queue shutdown messages
+→ enable POLLOUT for clients
+→ call poll() again
+
+poll() reports client POLLOUT
+→ _flushClientOutput()
+→ actual send()
+→ close client after writing
+
+When all clients are closed:
+→ loop finishes
+→ destructor closes the listening socket
+```
 
 ## NOTES and COMMENTS
 

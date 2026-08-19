@@ -1,5 +1,21 @@
 #include "../../includes/Server.hpp"
 
+bool parsePort(const std::string &argument, int &port) {
+	if (argument.empty())
+		return false;
+	port = 0;
+	for (size_t i = 0; i < argument.size(); i++) {
+		unsigned char character = static_cast<unsigned char>(argument[i]);
+
+		if (!std::isdigit(character))
+			return false;
+		port = port * 10 + (argument[i] - '0');
+		if (port > 65535)
+			return false;
+	}
+	return port > 0;
+}
+
 bool Server::_parseCommand(const std::string &line, Command &command) const {
 	std::string::size_type pos = 0;
 	std::string::size_type start;

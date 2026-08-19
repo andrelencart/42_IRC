@@ -1,5 +1,24 @@
 #include "../../includes/Server.hpp"
 
+static bool isNicknameLetterOrSpecial(char character) {
+	return ((character >= 'A' && character <= 'Z')
+		|| (character >= 'a' && character <= 'z')
+		|| std::string("[]\\`_^{|}").find(character) != std::string::npos);
+}
+
+static bool isValidNickname(const std::string &nickname) {
+	if (nickname.empty() || nickname.size() > 9
+		|| !isNicknameLetterOrSpecial(nickname[0]))
+		return false;
+	for (size_t i = 1; i < nickname.size(); i++) {
+		if (!isNicknameLetterOrSpecial(nickname[i])
+			&& !(nickname[i] >= '0' && nickname[i] <= '9')
+			&& nickname[i] != '-')
+			return false;
+	}
+	return true;
+}
+
 void Server::_handleHelp(int fd)
 {
 	_sendMsg(fd,"IRC Connection Manual\r\n\n");
@@ -57,17 +76,9 @@ bool Server::_handleNick(int fd, const Command &command)
 		_sendNumericReply(fd, ERR_NONICKNAMEGIVEN());
 		return false;
 	}
-	if (nick.size() > 9 || isdigit(nick[0]) || nick[0] == '-') {
+	if (!isValidNickname(nick)) {
 		_sendNumericReply(fd, ERR_ERRONEUSNICKNAME(nick));
 		return false;
-	}
-	for (size_t i = 0; i < nick.size(); i++) {
-		if (isspace(nick[i]) || !isascii(nick[i]) || nick[i] == '@'
-			|| nick[i] == '!' || nick[i] == '.' || nick[i] == ':'
-			|| nick[i] == ',') {
-			_sendNumericReply(fd, ERR_ERRONEUSNICKNAME(nick));
-			return false;
-		}
 	}
 	if (_nickInUse(nick, fd)) {
 		_sendNumericReply(fd, ERR_NICKNAMEINUSE(nick));
