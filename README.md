@@ -217,10 +217,14 @@ Implemented for individual recipients and channels.
 - Sends direct messages to a connected nickname.
 - Supports trailing messages after `:`.
 - Supports `PRIVMSG #channel :message` and broadcasts it to other channel members.
+- Supports comma-separated nickname and channel recipients, including mixed
+  target lists, while delivering at most one copy to each target.
+- Reports invalid or empty targets independently without preventing delivery
+  to other valid targets in the same list.
 - Rejects an empty recipient, empty message, unknown channel, and sends to channels the client has not joined.
 - Returns `401 ERR_NOSUCHNICK` for an unknown direct-message recipient.
-
-Current limitation: multiple comma-separated recipients are not supported.
+- Rejects ambiguous extra parameters instead of silently truncating the
+  message when a separator or trailing `:` is missing.
 
 ### KICK
 
