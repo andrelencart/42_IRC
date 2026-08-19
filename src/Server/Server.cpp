@@ -6,7 +6,7 @@
 /*   By: rmota-ma <rmota-ma@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/27 16:49:29 by dicosta-          #+#    #+#             */
-/*   Updated: 2026/06/26 20:55:50 by rmota-ma         ###   ########.fr       */
+/*   Updated: 2026/08/19 18:31:17 by rmota-ma         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,8 +29,12 @@ Server::Server(int port, std::string password, std::string serverName): _port(po
 }
 
 Server::~Server() {
-	for (size_t i = 1; i < _fds.size(); i++)
+	for (size_t i = 1; i < _fds.size(); i++){
+		if(_fds[i].fd == 0)
+			continue;
+		send(_fds[i].fd, "ERROR :Closing Link: Server Shutdown.\r\n", 39, 0);
 		close(_fds[i].fd);
+	}
 	if (_servFd != -1)
 		close(_servFd);
 	std::cout << "Server Shutdown!" << std::endl;
@@ -65,6 +69,14 @@ void Server::_loopServer() {
 	servPollFd.events = POLLIN; // This Flag means this "wake me up when this fd has data ready to read"
 	servPollFd.revents = 0;
 	_fds.push_back(servPollFd);
+
+	struct pollfd consolePollFd;
+	consolePollFd.fd = STDIN_FILENO;
+	consolePollFd.events = POLLIN; // This Flag means this "wake me up when this fd has data ready to read"
+	consolePollFd.revents = 0;
+	_fds.push_back(consolePollFd);
+	char buf[512];
+	std::string temp;
 	signal(SIGINT, signalHandler);
 	while (!g_stop) {
 		int connected = poll(_fds.data(), _fds.size(), -1);
@@ -78,6 +90,18 @@ void Server::_loopServer() {
 				if (_fds[i].revents & POLLIN)
 					_acceptNewClient();
 				continue;
+			}
+			if (i == 1){
+				if (_fds[i].revents & POLLIN){
+					size_t bytes = read(STDIN_FILENO, buf, sizeof(buf));
+					std::string cmd;
+					cmd.append(buf, bytes);
+					for(size_t i = 0; i < bytes; i++)
+						cmd[i] = tolower(cmd[i]);
+					if(cmd == "shutdown\n")
+						g_stop = 1;
+				}
+				continue ;
 			}
 			int clientFd = _fds[i].fd;
 			short revents = _fds[i].revents;
