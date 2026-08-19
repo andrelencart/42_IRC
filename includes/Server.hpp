@@ -196,6 +196,12 @@ bool parsePort(const std::string &argument, int &port);
 	"451", "", "You have not registered"
 #define ERR_NEEDMOREPARAMS(cmd) \
 	"461", (cmd), "Not enough parameters"
+#define ERR_TOOMANYPARAMS(cmd) \
+	"461", (cmd), "Too many parameters"
+#define ERR_MALFORMEDTEXT(cmd) \
+	"461", (cmd), "Multi-word text must begin with ':'"
+#define ERR_INVALIDUSERPARAMS() \
+	"461", "USER", "Second and third parameters must be 0 and *"
 #define ERR_ALREADYREGISTED() \
 	"462", "", "Unauthorized command (already registered)"
 #define ERR_NOPERMFORHOST() \

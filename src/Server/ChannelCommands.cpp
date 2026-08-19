@@ -43,6 +43,14 @@ bool Server::_handleKick(int fd, const Command &command) {
 	channelName = command.params[0];
 	targetNickname = command.params[1];
 	comment = _clients[fd].getNickname();
+	if (command.hasTrailing && command.params.size() != 2) {
+		_sendNumericReply(fd, ERR_MALFORMEDTEXT("KICK"));
+		return false;
+	}
+	if (!command.hasTrailing && command.params.size() > 3) {
+		_sendNumericReply(fd, ERR_MALFORMEDTEXT("KICK"));
+		return false;
+	}
 	if (command.hasTrailing)
 		comment = command.trailing;
 	else if (command.params.size() > 2)
@@ -94,6 +102,14 @@ bool Server::_handlePart(int fd, const Command &command) {
 	}
 	channelList = command.params[0];
 	partMessage = _clients[fd].getNickname();
+	if (command.hasTrailing && command.params.size() != 1) {
+		_sendNumericReply(fd, ERR_MALFORMEDTEXT("PART"));
+		return false;
+	}
+	if (!command.hasTrailing && command.params.size() > 2) {
+		_sendNumericReply(fd, ERR_MALFORMEDTEXT("PART"));
+		return false;
+	}
 	if (command.hasTrailing)
 		partMessage = command.trailing;
 	else if (command.params.size() > 1)
@@ -118,6 +134,10 @@ bool Server::_handleInvite(int fd, const Command &command) {
 
 	if (command.params.size() < 2) {
 		_sendNumericReply(fd, ERR_NEEDMOREPARAMS("INVITE"));
+		return false;
+	}
+	if (command.hasTrailing || command.params.size() > 2) {
+		_sendNumericReply(fd, ERR_TOOMANYPARAMS("INVITE"));
 		return false;
 	}
 	targetNickname = command.params[0];

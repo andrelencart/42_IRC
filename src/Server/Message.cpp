@@ -29,7 +29,7 @@ bool Server::_parseMsgRequest(int fd, const Command &command,
 	}
 	if (command.hasTrailing) {
 		if (command.params.size() != 1) {
-			_sendNumericReply(fd, ERR_NEEDMOREPARAMS("PRIVMSG"));
+			_sendNumericReply(fd, ERR_MALFORMEDTEXT("PRIVMSG"));
 			return false;
 		}
 		message = command.trailing;
@@ -39,7 +39,7 @@ bool Server::_parseMsgRequest(int fd, const Command &command,
 		return false;
 	}
 	else if (command.params.size() != 2) {
-		_sendNumericReply(fd, ERR_NEEDMOREPARAMS("PRIVMSG"));
+		_sendNumericReply(fd, ERR_MALFORMEDTEXT("PRIVMSG"));
 		return false;
 	}
 	else
